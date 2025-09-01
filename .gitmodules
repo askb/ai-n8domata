@@ -1,0 +1,9 @@
+[submodule "services/short-video-maker"]
+	path = services/short-video-maker
+	url = https://github.com/gyoridavid/short-video-maker.git
+[submodule "services/ai-agents-no-code-tools"]
+	path = services/ai-agents-no-code-tools
+	url = https://github.com/gyoridavid/ai-agents-no-code-tools.git
+[submodule "services/no-code-architects-toolkit"]
+	path = services/no-code-architects-toolkit
+	url = https://github.com/stephengpope/no-code-architects-toolkit.git

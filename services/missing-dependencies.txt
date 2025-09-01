@@ -1,0 +1,75 @@
+# AI Agent CPU Missing Dependencies
+
+## Core Missing Dependencies (Required)
+These were discovered through error messages and needed to be installed:
+
+```bash
+# Core Chinese language processing for Kokoro TTS international
+ordered-set          # Required by misaki.transcription
+pypinyin            # Required by misaki.transcription for Chinese phonetic conversion
+cn2an               # Required by misaki.zh for Chinese number conversion
+```
+
+## Additional Recommended Dependencies
+These may be needed for full functionality:
+
+```bash
+# Extended Chinese/multilingual support
+opencc-python-reimplemented  # Traditional/Simplified Chinese conversion
+jieba                       # Chinese text segmentation
+misaki                     # Already installed, but listed for completeness
+
+# Advanced multilingual TTS support
+pangu                      # Chinese text formatting
+zhconv                     # Chinese variant conversion
+epitran                    # International Phonetic Alphabet conversion
+num2words                  # Number to words conversion
+inflect                    # English linguistic transformations
+unidecode                  # Unicode to ASCII conversion
+phonemizer                 # Text to phoneme conversion
+gruut                      # Phoneme processing
+espeak-ng                  # Text-to-speech synthesis engine
+```
+
+## Installation Commands Used
+
+```bash
+# Minimum required (installed during troubleshooting)
+docker exec -it ai-agent-cpu pip install ordered-set
+docker exec -it ai-agent-cpu pip install pypinyin
+docker exec -it ai-agent-cpu pip install cn2an
+
+# Full recommended set (optional)
+docker exec -it ai-agent-cpu pip install \
+    ordered-set \
+    pypinyin \
+    cn2an \
+    opencc-python-reimplemented \
+    jieba \
+    pangu \
+    zhconv \
+    epitran \
+    num2words \
+    inflect \
+    unidecode \
+    phonemizer \
+    gruut \
+    espeak-ng
+```
+
+## Why These Are Needed
+
+- **Kokoro TTS International Pipeline**: The service tries to use `kokoro_international` for non-English voices
+- **Chinese Language Support**: Many dependencies are for Chinese text processing (pinyin, character conversion, etc.)
+- **Missing from Base Image**: The `gyoridavid/ai-agents-no-code-tools:latest` image is missing these multilingual TTS dependencies
+
+## Errors Encountered
+
+1. `ModuleNotFoundError: No module named 'ordered_set'`
+2. `ModuleNotFoundError: No module named 'pypinyin'`
+3. `ModuleNotFoundError: No module named 'cn2an'`
+
+## Solution Status
+✅ **Fixed**: Core dependencies installed
+✅ **Working**: Kokoro TTS now functions with international voices
+⚠️ **Temporary**: Dependencies installed at runtime (not persistent across container rebuilds)

@@ -1,0 +1,111 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [ master, main, develop ]
+  pull_request:
+    branches: [ master, main, develop ]
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly on Sundays
+
+jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install detect-secrets
+      run: pip install detect-secrets
+
+    - name: Run detect-secrets
+      run: |
+        detect-secrets scan --all-files --baseline .secrets.baseline || true
+        detect-secrets audit .secrets.baseline || true
+
+  dependency-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install safety
+      run: pip install safety
+
+    - name: Scan Python dependencies for vulnerabilities
+      run: |
+        find . -name requirements.txt -exec safety check -r {} \; || true
+
+  container-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build test images
+      run: |
+        docker build -t test-n8n:latest -f Dockerfile .
+        docker build -t test-queue-metrics:latest -f Dockerfile.queue-metrics .
+
+    - name: Run Trivy vulnerability scanner on N8N image
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'test-n8n:latest'
+        format: 'sarif'
+        output: 'trivy-n8n-results.sarif'
+
+    - name: Run Trivy vulnerability scanner on Queue Metrics image
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'test-queue-metrics:latest'
+        format: 'sarif'
+        output: 'trivy-queue-metrics-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: 'trivy-n8n-results.sarif'
+
+    - name: Upload Queue Metrics scan results
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: 'trivy-queue-metrics-results.sarif'
+
+  codeql-analysis:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+
+    strategy:
+      matrix:
+        language: [ 'python', 'javascript' ]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: ${{ matrix.language }}
+
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v3
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3

@@ -1,0 +1,88 @@
+# Multi-stage build for efficient container
+FROM python:3.11-slim as builder
+
+# Install system dependencies for building
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    curl \
+    jq \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first for better layer caching
+COPY dynamic-scaler/requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir --user -r requirements.txt
+
+# Install Docker Compose CLI
+RUN mkdir -p ~/.docker/cli-plugins/ && \
+    curl -SL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m)" \
+    -o ~/.docker/cli-plugins/docker-compose && \
+    chmod +x ~/.docker/cli-plugins/docker-compose
+
+# Production stage
+FROM python:3.11-slim
+
+# Install runtime dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    curl \
+    docker.io \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user for security
+RUN groupadd -r scaler && useradd -r -g scaler scaler
+
+# Set working directory
+WORKDIR /app
+
+# Copy Python dependencies from builder stage
+COPY --from=builder /root/.local /home/scaler/.local
+
+# Copy Docker Compose binary from builder stage
+COPY --from=builder /root/.docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
+
+# Copy application code
+COPY dynamic-scaler/ .
+
+# Copy docker-compose.yml and .env for scaling operations
+COPY docker-compose.yml .
+COPY .env .
+
+# Set ownership and permissions
+RUN chown -R scaler:scaler /app && \
+    chmod +x /usr/local/bin/docker-compose
+
+# Add Docker group for the scaler user (to access Docker socket)
+RUN groupadd -f docker && usermod -aG docker scaler
+
+# Switch to non-root user
+USER scaler
+
+# Make sure scripts in .local are usable
+ENV PATH=/home/scaler/.local/bin:$PATH
+
+# Environment variables with defaults
+ENV REDIS_HOST=redis \
+    REDIS_PORT=6379 \
+    QUEUE_NAME_PREFIX=bull \
+    QUEUE_NAME=jobs \
+    N8N_WORKER_SERVICE_NAME=n8n-worker \
+    MIN_REPLICAS=1 \
+    MAX_REPLICAS=5 \
+    SCALE_UP_QUEUE_THRESHOLD=5 \
+    SCALE_DOWN_QUEUE_THRESHOLD=0 \
+    POLLING_INTERVAL_SECONDS=30 \
+    COOLDOWN_PERIOD_SECONDS=120 \
+    COMPOSE_FILE_PATH=/app/docker-compose.yml
+
+# Health check
+HEALTHCHECK --interval=60s --timeout=30s --start-period=10s --retries=3 \
+    CMD python -c "import redis; r = redis.Redis(host='${REDIS_HOST}', port=${REDIS_PORT}); r.ping()" || exit 1
+
+# Run the scaling service
+CMD ["python", "-u", "scaler.py"]

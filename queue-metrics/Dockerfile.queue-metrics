@@ -1,0 +1,55 @@
+# Multi-stage build for efficient Python container
+FROM python:3.11-slim as builder
+
+# Install system dependencies for building Python packages
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first for better layer caching
+COPY queue-metrics/requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir --user -r requirements.txt
+
+# Production stage
+FROM python:3.11-slim
+
+# Create non-root user for security
+RUN groupadd -r queuemetrics && useradd -r -g queuemetrics queuemetrics
+
+# Set working directory
+WORKDIR /app
+
+# Copy Python dependencies from builder stage
+COPY --from=builder /root/.local /home/queuemetrics/.local
+
+# Copy application code
+COPY queue-metrics/ .
+
+# Set ownership and permissions
+RUN chown -R queuemetrics:queuemetrics /app
+
+# Switch to non-root user
+USER queuemetrics
+
+# Make sure scripts in .local are usable
+ENV PATH=/home/queuemetrics/.local/bin:$PATH
+
+# Environment variables with defaults
+ENV REDIS_HOST=redis \
+    REDIS_PORT=6379 \
+    QUEUE_NAME_PREFIX=bull \
+    QUEUE_NAME=jobs \
+    POLL_INTERVAL_SECONDS=5
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import redis; r = redis.Redis(host='${REDIS_HOST}', port=${REDIS_PORT}); r.ping()" || exit 1
+
+# Run the monitoring service
+CMD ["python", "-u", "monitor.py"]

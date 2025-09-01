@@ -1,0 +1,84 @@
+name: Docker Build Test
+
+on:
+  push:
+    branches: [ master, main, develop ]
+  pull_request:
+    branches: [ master, main, develop ]
+
+jobs:
+  docker-build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - name: n8n
+            dockerfile: Dockerfile
+            context: .
+          - name: queue-metrics
+            dockerfile: Dockerfile.queue-metrics
+            context: .
+          - name: dynamic-scaler
+            dockerfile: dynamic-scaler/Dockerfile
+            context: dynamic-scaler
+          - name: intelligent-cropper
+            dockerfile: Dockerfile
+            context: .
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Docker image for ${{ matrix.service.name }}
+      uses: docker/build-push-action@v5
+      with:
+        context: ${{ matrix.service.context }}
+        file: ${{ matrix.service.context }}/${{ matrix.service.dockerfile }}
+        push: false
+        tags: test-${{ matrix.service.name }}:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Test Docker image
+      run: |
+        docker run --rm test-${{ matrix.service.name }}:latest --help || true
+
+  compose-test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Create required directories and symlinks
+      run: |
+        mkdir -p /tmp/ai-automata-data/{backups,caches,daily-backups,data,postgres-data,videos}
+        mkdir -p /tmp/ai-automata-data/{wan21-data,wan21-outputs,wan21-models,wan21-custom-nodes}
+        mkdir -p /tmp/ai-automata-data/{cogvideo-data,cogvideo-outputs,cogvideo-custom-nodes}
+        mkdir -p /tmp/ai-automata-data/{stable-diffusion-data,stable-diffusion-extensions,stable-diffusion-models,stable-diffusion-outputs}
+        mkdir -p /tmp/ai-automata-data/{svd-data,svd-models,svd-outputs,svd-workflows}
+        mkdir -p /tmp/ai-automata-data/comfyui-install
+
+        # Create symlinks
+        ln -sf /tmp/ai-automata-data/backups backups
+        ln -sf /tmp/ai-automata-data/caches caches
+        ln -sf /tmp/ai-automata-data/daily-backups daily-backups
+        ln -sf /tmp/ai-automata-data/data data
+        ln -sf /tmp/ai-automata-data/postgres-data postgres-data
+        ln -sf /tmp/ai-automata-data/videos videos
+
+    - name: Copy env example to env
+      run: cp env.example .env
+
+    - name: Update .env for CI  # pragma: allowlist secret
+      run: |  # pragma: allowlist secret
+        sed -i 's/your-secure-database-password/test-password/g' .env  # pragma: allowlist secret
+        sed -i 's/your-32-character-encryption-key/12345678901234567890123456789012/g' .env  # pragma: allowlist secret
+        sed -i 's/your-64-character-jwt-secret/1234567890123456789012345678901234567890123456789012345678901234/g' .env  # pragma: allowlist secret
+        sed -i 's/your-64-character-runners-auth-token/1234567890123456789012345678901234567890123456789012345678901234/g' .env  # pragma: allowlist secret
+
+    - name: Validate Docker Compose config
+      run: docker compose --profile core config > /dev/null
+
+    - name: Test Docker Compose build
+      run: docker compose --profile core build --parallel

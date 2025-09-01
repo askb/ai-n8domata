@@ -1,0 +1,1150 @@
+# Only keep traefik volume since it still uses named volume
+volumes:
+  traefik_data:
+
+networks:
+  n8n-network:
+    driver: bridge
+
+x-n8n: &service-n8n
+  build:
+    context: .
+    dockerfile: Dockerfile
+  profiles:
+    - core
+  user: root:root
+  restart: unless-stopped
+  networks:
+    - n8n-network
+  environment:
+    - N8N_DIAGNOSTICS_ENABLED=${N8N_DIAGNOSTICS_ENABLED}
+    - N8N_USER_FOLDER=${N8N_USER_FOLDER}
+    - N8N_SECURE_COOKIE=${N8N_SECURE_COOKIE}
+    - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=${N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS}
+    - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+    - N8N_HOST=${N8N_HOST}
+    - N8N_PROTOCOL=${N8N_PROTOCOL}
+    - N8N_WEBHOOK=${N8N_WEBHOOK}
+    - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL}
+    - WEBHOOK_URL=${WEBHOOK_URL}
+    - N8N_EDITOR_BASE_URL=${N8N_EDITOR_BASE_URL}
+    # Queue mode config
+    - EXECUTIONS_MODE=${EXECUTIONS_MODE}
+    - QUEUE_BULL_REDIS_HOST=${QUEUE_BULL_REDIS_HOST}
+    - QUEUE_HEALTH_CHECK_ACTIVE=${QUEUE_HEALTH_CHECK_ACTIVE}
+    - N8N_QUEUE_BULL_GRACEFULSHUTDOWNTIMEOUT=${N8N_QUEUE_BULL_GRACEFULSHUTDOWNTIMEOUT}
+    - N8N_GRACEFUL_SHUTDOWN_TIMEOUT=${N8N_GRACEFUL_SHUTDOWN_TIMEOUT}
+    # DB config
+    - DB_TYPE=${DB_TYPE}
+    - DB_POSTGRESDB_HOST=${POSTGRES_HOST}
+    - DB_POSTGRESDB_DATABASE=${POSTGRES_DB}
+    - DB_POSTGRESDB_USER=${POSTGRES_USER}
+    - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
+    # Task Runner config
+    - OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS=${OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS}
+    - N8N_RUNNERS_AUTH_TOKEN=${N8N_RUNNERS_AUTH_TOKEN}
+    - N8N_TASK_BROKER_URL=${N8N_TASK_BROKER_URL}
+    - N8N_COMMAND_RESPONSE_URL=${N8N_COMMAND_RESPONSE_URL}
+    - N8N_TASK_BROKER_PORT=${N8N_TASK_BROKER_PORT}
+    - NODE_FUNCTION_ALLOW_EXTERNAL=ajv,ajv-formats,puppeteer
+    - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+    # BINARY DATA CONFIGURATION - ADD THESE LINES
+    - N8N_DEFAULT_BINARY_DATA_MODE=filesystem
+    - N8N_BINARY_DATA_TTL=1440
+    - N8N_BINARY_DATA_STORAGE_PATH=/home/node/.n8n/binaryData
+
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: n8n-cloudflared
+    restart: unless-stopped
+    networks:
+      - n8n-network
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    profiles:
+      - core
+
+  traefik:
+    image: traefik:v2.10
+    container_name: n8n-traefik
+    restart: unless-stopped
+    networks:
+      - n8n-network
+    profiles:
+      - core
+    command:
+      - "--api=true"
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--api.insecure=true"
+      - "--providers.docker.exposedbydefault=false"
+      # CLOUDFLARE TUNNEL SETUP - Only HTTP needed (Cloudflare handles SSL)
+      - "--entrypoints.web.address=:80"
+      # Keep existing N8N specific entrypoints
+      - "--entrypoints.n8n_ui.address=:8082"
+      - "--entrypoints.n8n_webhooks.address=:8083"
+      # Enable access logs for debugging
+      - "--accesslog=true"
+      - "--log.level=INFO"
+    ports:
+      - "80:80"           # Only HTTP needed for Cloudflare Tunnel
+      - "8082:8082"       # N8N UI
+      - "8083:8083"       # N8N webhooks
+      - "8081:8080"       # Traefik dashboard
+    volumes:
+      - traefik_data:/letsencrypt
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    labels:
+      # Basic Traefik dashboard
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`${TRAEFIK_HOST}`) || Host(`localhost`)"
+      - "traefik.http.routers.dashboard.entrypoints=web"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      # Security headers middleware
+      - "traefik.http.middlewares.secure-headers.headers.framedeny=true"
+      - "traefik.http.middlewares.secure-headers.headers.contenttypenosniff=true"
+      - "traefik.http.middlewares.secure-headers.headers.browserxssfilter=true"
+      - "traefik.http.middlewares.secure-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
+      # Rate limiting middleware (100 requests/second average, 200 burst)
+      - "traefik.http.middlewares.rate-limit.ratelimit.average=100"
+      - "traefik.http.middlewares.rate-limit.ratelimit.burst=200"
+      # IP whitelist middleware (replace with your IP)
+      - "traefik.http.middlewares.ip-whitelist.ipwhitelist.sourcerange=${IP_WHITELIST_RANGE}"
+
+  redis:
+    image: redis:7-alpine
+    container_name: n8n-redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 3s
+    profiles:
+      - core
+    volumes:
+      - ./backups/redis:/data
+    networks:
+      - n8n-network
+
+  postgres:
+    image: postgres:17
+    container_name: n8n-postgres
+    restart: unless-stopped
+    profiles:
+      - core
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - PGDATA=${PGDATA}
+      - POSTGRES_HOST_AUTH_METHOD=scram-sha-256
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256 --auth-local=scram-sha-256
+    volumes:
+      - ./postgres-data/pgdata:/var/lib/postgresql/data/pgdata
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - n8n-network
+
+  n8n:
+    <<: *service-n8n
+    container_name: n8n-main
+    ports:
+      - "5678:5678"
+      - "5679:5679"
+    volumes:
+      - ./backups/n8n-data:/n8n
+      - ./backups/n8n-workflows:/home/node/.n8n/workflows
+      - ./backups/n8n-credentials:/home/node/.n8n/credentials
+      - ./backups/n8n-binary:/home/node/.n8n/binaryData  # ADD THIS LINE
+      - ./videos:/app/data/videos:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - n8n-network
+    healthcheck:
+      test: ["CMD", "node", "-v"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.n8n-ui.rule=Host(`${N8N_HOST}`)"
+      - "traefik.http.routers.n8n-ui.entrypoints=n8n_ui"
+      - "traefik.http.routers.n8n-webhooks.rule=Host(`${N8N_WEBHOOK}`)"
+      - "traefik.http.routers.n8n-webhooks.entrypoints=n8n_webhooks"
+      - "traefik.http.services.n8n.loadbalancer.server.port=5678"
+
+  n8n-webhook:
+    <<: *service-n8n
+    container_name: n8n-webhook
+    command: sh /webhook
+    volumes:
+      - ./backups/n8n-data:/n8n
+      - ./backups/n8n-binary:/home/node/.n8n/binaryData
+    depends_on:
+      n8n:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - n8n-network
+
+  n8n-worker:
+    <<: *service-n8n
+    container_name: n8n-worker
+    stop_grace_period: 5m
+    command: sh /worker
+    volumes:
+      - ./backups/n8n-data:/n8n
+      - ./backups/n8n-binary:/home/node/.n8n/binaryData
+    depends_on:
+      n8n:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - n8n-network
+    healthcheck:
+      test: ["CMD", "node", "-v"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  queue-metrics:
+    build:
+      context: .
+      dockerfile: queue-metrics/Dockerfile.queue-metrics
+    container_name: n8n-queue-metrics
+    profiles:
+      - core
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - n8n-network
+    environment:
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - QUEUE_NAME_PREFIX=${QUEUE_NAME_PREFIX}
+      - QUEUE_NAME=${QUEUE_NAME}
+      - POLL_INTERVAL_SECONDS=${POLL_INTERVAL_SECONDS}
+
+  dynamic-scaler:
+    build:
+      context: .
+      dockerfile: dynamic-scaler/Dockerfile.dynamic-scaler
+      args:
+        - REDIS_HOST=${REDIS_HOST}
+        - REDIS_PORT=${REDIS_PORT}
+        - QUEUE_NAME_PREFIX=${QUEUE_NAME_PREFIX}
+        - QUEUE_NAME=${QUEUE_NAME}
+        - N8N_WORKER_SERVICE_NAME=${N8N_WORKER_SERVICE_NAME}
+        - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
+    container_name: n8n-dynamic-scaler
+    profiles:
+      - core
+    restart: unless-stopped
+    environment:
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - QUEUE_NAME_PREFIX=${QUEUE_NAME_PREFIX}
+      - QUEUE_NAME=${QUEUE_NAME}
+      - N8N_WORKER_SERVICE_NAME=${N8N_WORKER_SERVICE_NAME}
+      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
+      - COMPOSE_FILE_PATH=/app/docker-compose.yml
+      - MIN_REPLICAS=${MIN_REPLICAS}
+      - MAX_REPLICAS=${MAX_REPLICAS}
+      - SCALE_UP_QUEUE_THRESHOLD=${SCALE_UP_QUEUE_THRESHOLD}
+      - SCALE_DOWN_QUEUE_THRESHOLD=${SCALE_DOWN_QUEUE_THRESHOLD}
+      - POLLING_INTERVAL_SECONDS=${POLLING_INTERVAL_SECONDS}
+      - COOLDOWN_PERIOD_SECONDS=${COOLDOWN_PERIOD_SECONDS}
+      - NODE_FUNCTION_ALLOW_EXTERNAL=ajv,ajv-formats,puppeteer
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+      - N8N_QUEUE_BULL_GRACEFULSHUTDOWNTIMEOUT=${N8N_QUEUE_BULL_GRACEFULSHUTDOWNTIMEOUT}
+      - N8N_GRACEFUL_SHUTDOWN_TIMEOUT=${N8N_GRACEFUL_SHUTDOWN_TIMEOUT}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./.env:/app/.env
+    depends_on:
+      redis:
+        condition: service_healthy
+      n8n-worker:
+        condition: service_started
+    networks:
+      - n8n-network
+
+  n8n-backup:
+    image: alpine:latest
+    container_name: n8n-backup
+    restart: unless-stopped
+    profiles:
+      - core
+    networks:
+      - n8n-network
+    volumes:
+      - ./backups:/source
+      - ./daily-backups:/backups
+    environment:
+      - TZ=UTC
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    command: >
+      sh -c "
+        echo 'Installing required packages...'
+        apk add --no-cache tar gzip findutils coreutils postgresql-client
+        echo 'Starting backup service...'
+        while true; do
+          echo 'Creating backup at: $$(date)'
+          BACKUP_DATE=$$(date +%Y%m%d-%H%M%S)
+          DUMP_FILE="/source/dump-$$BACKUP_DATE.sql"
+
+          echo 'Dumping database...'
+          export PGPASSWORD=$$POSTGRES_PASSWORD
+          pg_dump -h postgres -U $$POSTGRES_USER -d $$POSTGRES_DB -f $$DUMP_FILE
+
+          if [ $$? -eq 0 ]; then
+            echo 'Database dump successful. Creating archive...'
+            tar -czf /backups/n8n-full-backup-$$BACKUP_DATE.tar.gz -C /source n8n-credentials n8n-workflows n8n-data $$(basename $$DUMP_FILE)
+
+            if [ $$? -eq 0 ]; then
+                echo 'Backup created successfully.'
+            else
+                echo 'Archive creation failed!'
+            fi
+
+            echo 'Cleaning up dump file...'
+            rm $$DUMP_FILE
+          else
+            echo 'Database dump failed!'
+          fi
+
+          echo 'Cleaning up old backups...'
+          find /backups -name 'n8n-full-backup-*.tar.gz' -mtime +7 -delete
+
+          echo 'Next backup in 24 hours'
+          sleep 86400
+        done
+      "
+    depends_on:
+      - postgres
+      - n8n
+
+  short-video-maker-cpu:
+    image: gyoridavid/short-video-maker:latest-tiny
+    container_name: n8n-short-video-maker-cpu
+    restart: unless-stopped
+    profiles:
+      - core
+    networks:
+      - n8n-network
+    environment:
+      - LOG_LEVEL=error
+      - PEXELS_API_KEY=${PEXELS_API_KEY}
+    volumes:
+      - ./videos:/app/data/videos
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3123/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.short-video-maker.rule=Host(`${SHORT_VIDEO_MAKER_HOST}`)"
+      - "traefik.http.routers.short-video-maker.entrypoints=web"
+      - "traefik.http.routers.short-video-maker.service=short-video-maker"
+      - "traefik.http.services.short-video-maker.loadbalancer.server.port=3123"
+
+  short-video-maker-rocm:
+    build:
+      context: ./services/short-video-maker
+      dockerfile: pytorch-whisper-complete.Dockerfile
+    container_name: n8n-short-video-maker-rocm
+    restart: unless-stopped
+    profiles:
+      - disabled
+    networks:
+      - n8n-network
+    environment:
+      - LOG_LEVEL=info
+      - PEXELS_API_KEY=${PEXELS_API_KEY}
+      # Enable GPU-accelerated medium model (like CUDA variant)
+      - WHISPER_MODEL=medium.en
+      - WHISPER_USE_GPU=true
+      - DOCKER=false  # Changed from true to false
+
+      # ROCm settings optimized for RX 6800M (gfx1031) - compatible with rocm/pytorch:latest
+      - HSA_OVERRIDE_GFX_VERSION=10.3.0  # Use gfx1030 libraries for gfx1031 hardware
+      - HIP_VISIBLE_DEVICES=0
+      - ROCR_VISIBLE_DEVICES=0
+      - HSA_ENABLE_SDMA=0
+      - ROCM_PATH=/opt/rocm
+      - PATH=/opt/rocm/bin:/usr/bin:$PATH
+      - LD_LIBRARY_PATH=/opt/rocm/lib:/usr/lib64
+      - PYTORCH_ROCM_ARCH=gfx1031  # Proper architecture targeting
+
+      # Memory optimization (corrected for PyTorch 2.6+)
+      - PYTORCH_HIP_ALLOC_CONF=expandable_segments:True,garbage_collection_threshold:0.6
+      - HIP_MEMORY_POOL_TRIM_ENABLE=1
+      - TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1
+      - PYTORCH_TUNABLEOP_ENABLED=1
+      - ROCBLAS_LAYER=1
+
+      # App-specific
+      - CONCURRENCY=1
+      - VIDEO_CACHE_SIZE_IN_BYTES=1073741824
+    volumes:
+      - ./videos:/app/data/videos
+      - ./caches/svm-pip:/root/.cache/pip:rw
+      - ./caches/svm-huggingface:/root/.cache/huggingface:rw  # Cache for model downloads
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri/card1:/dev/dri/card0  # Map discrete GPU (12.8GB VRAM) as primary
+      - /dev/dri/card2:/dev/dri/card1  # Map integrated GPU as secondary
+      - /dev/dri/renderD128:/dev/dri/renderD128
+      - /dev/dri/renderD129:/dev/dri/renderD129
+    security_opt:
+      - seccomp:unconfined
+    group_add:
+      - video
+    ipc: host
+    cap_add:
+      - SYS_PTRACE
+    shm_size: "4gb"
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+          cpus: "6.0"
+        reservations:
+          memory: 6G  # Increased for PyTorch + model loading
+          cpus: "2.0"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3123/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s  # Increased for model download time
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.short-video-maker.rule=Host(`${SHORT_VIDEO_MAKER_HOST}`)"
+      - "traefik.http.routers.short-video-maker.entrypoints=web"
+      - "traefik.http.routers.short-video-maker.service=short-video-maker"
+      - "traefik.http.services.short-video-maker.loadbalancer.server.port=3123"
+
+  ai-agent-cpu:
+    image: gyoridavid/ai-agents-no-code-tools:latest
+    container_name: n8n-ai-agent-cpu
+    restart: unless-stopped
+    profiles:
+      - core
+    networks:
+      - n8n-network
+    ports:
+      - "8008:8000"
+    environment:
+      # Basic configuration
+      - LOG_LEVEL=error
+      - PYTHONUNBUFFERED=1
+      # Force CPU mode
+      - CUDA_VISIBLE_DEVICES=""
+      - PYTORCH_DISABLE_CUDA=1
+      - TORCH_DEVICE=cpu
+    volumes:
+      - ./caches/ai-agent-pip:/root/.cache/pip:rw
+      - ./services/ai-agent-no-code-tools-requirements.txt:/tmp/requirements.txt:ro
+      - ./videos:/app/media/video
+    command: |
+      sh -c "
+        echo 'Installing additional dependencies...'
+        pip install --no-cache-dir -r /tmp/requirements.txt
+        echo 'Dependencies installed, starting server...'
+        exec fastapi run server.py --host 0.0.0.0 --port 8000
+      "
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+          cpus: "8.0"
+        reservations:
+          memory: 2G
+          cpus: "1.0"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8008/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ai-agent-cpu.rule=Host(`${AI_AGENT_HOST}`)"
+      - "traefik.http.routers.ai-agent-cpu.entrypoints=web"
+      - "traefik.http.routers.ai-agent-cpu.service=ai-agent-cpu"
+      - "traefik.http.services.ai-agent-cpu.loadbalancer.server.port=8000"
+
+  ai-agent-rocm:
+    build:
+      context: ./services/ai-agents-no-code-tools
+      dockerfile: rocm.Dockerfile
+    image: ai-agents-no-code-tools
+    container_name: n8n-ai-agent-rocm
+    restart: unless-stopped
+    profiles:
+      - disabled
+    networks:
+      - n8n-network
+    ports:
+      - "8008:8008"
+    environment:
+      - CUDA_VISIBLE_DEVICES=""
+      - HIP_VISIBLE_DEVICES=""
+      - PYTORCH_DISABLE_CUDA=1
+      - AMD_SERIALIZE_KERNEL=3
+      - TORCH_USE_HIP_DSA=1
+      # Core ROCm settings to target the correct GPU
+      - HSA_OVERRIDE_GFX_VERSION=10.3.1
+      - HIP_VISIBLE_DEVICES=0
+      - ROCR_VISIBLE_DEVICES=0
+      - HSA_ENABLE_SDMA=0
+      - ROCM_PATH=/opt/rocm
+      - PATH=/opt/rocm/bin:/usr/bin:$PATH
+      - LD_LIBRARY_PATH=/opt/rocm/lib:/usr/lib64:$LD_LIBRARY_PATH
+      # Memory optimization flags
+      - PYTORCH_HIP_ALLOC_CONF=expandable_segments:True,garbage_collection_threshold:0.6,max_split_size_mb:64
+      - HIP_MEMORY_POOL_TRIM_ENABLE=1
+    volumes:
+      - ./caches/ai-agent-pip:/root/.cache/pip:rw
+    devices:
+      - "/dev/kfd:/dev/kfd"
+      - "/dev/dri/card1:/dev/dri/card0"
+      - "/dev/dri/renderD128:/dev/dri/renderD128"
+    security_opt:
+      - seccomp:unconfined
+    group_add:
+      - video
+    ipc: host
+    cap_add:
+      - SYS_PTRACE
+    shm_size: "8gb"
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+          cpus: "6.0"
+        reservations:
+          memory: 4G
+          cpus: "2.0"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8008/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    command: >
+      bash -c "
+        echo '--- Verifying GPU Access with rocminfo ---' &&
+        rocminfo &&
+        echo '--- GPU DETECTED SUCCESSFULLY ---' &&
+        echo '--- Starting FastAPI Server ---' &&
+        fastapi run server.py --host 0.0.0.0 --port 8008
+      "
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ai-agent-rocm.rule=Host(`${AI_AGENT_HOST}`)"
+      - "traefik.http.routers.ai-agent-rocm.entrypoints=web"
+      - "traefik.http.services.ai-agent-rocm.loadbalancer.server.port=8008"
+
+  miniio:
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
+    container_name: n8n-miniio
+    restart: unless-stopped
+    profiles:
+      - core
+    networks:
+      - n8n-network
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ./data/minio:/data
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    command: server /data --console-address ":9001"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.minio-api.rule=Host(`${MINIO_API_HOST}`)"
+      - "traefik.http.routers.minio-api.entrypoints=web"
+      - "traefik.http.routers.minio-api.service=minio-api"
+      - "traefik.http.services.minio-api.loadbalancer.server.port=9000"
+      - "traefik.http.routers.minio-console.rule=Host(`${MINIO_CONSOLE_HOST}`)"
+      - "traefik.http.routers.minio-console.entrypoints=web"
+      - "traefik.http.routers.minio-console.service=minio-console"
+      - "traefik.http.services.minio-console.loadbalancer.server.port=9001"
+
+  kokoro-tts:
+    image: ghcr.io/remsky/kokoro-fastapi-cpu:v0.2.2
+    container_name: n8n-kokoro-tts
+    restart: unless-stopped
+    profiles:
+      - core
+    networks:
+      - n8n-network
+    ports:
+      - "8880:8880"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8880/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kokoro-tts.rule=Host(`${KOKORO_TTS_HOST}`)"
+      - "traefik.http.routers.kokoro-tts.entrypoints=web"
+      - "traefik.http.routers.kokoro-tts.service=kokoro-tts"
+      - "traefik.http.services.kokoro-tts.loadbalancer.server.port=8880"
+
+  baserow:
+    image: baserow/baserow:1.32.5
+    container_name: n8n-baserow
+    restart: unless-stopped
+    profiles:
+      - core
+    environment:
+      BASEROW_PUBLIC_URL: ${BASEROW_PUBLIC_URL}
+    networks:
+      - n8n-network
+    ports:
+      - "85:80"
+      - "443:443"
+    volumes:
+      - ./data/baserow:/baserow/data
+    shm_size: 256mb
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.baserow.rule=Host(`${BASEROW_HOST}`)"
+      - "traefik.http.routers.baserow.entrypoints=web"
+      - "traefik.http.routers.baserow.service=baserow"
+      - "traefik.http.services.baserow.loadbalancer.server.port=80"
+
+  nca-toolkit:
+    image: stephengpope/no-code-architects-toolkit:latest
+    container_name: n8n-nca-toolkit
+    restart: unless-stopped
+    profiles:
+      - core
+    networks:
+      - n8n-network
+    ports:
+      - "8080:8080"
+    environment:
+      API_KEY: ${NCAT_API_KEY}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME}
+      S3_REGION: ${S3_REGION}
+      S3_PUBLIC_URL: ${S3_PUBLIC_URL}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nca-toolkit.rule=Host(`${NCA_TOOLKIT_HOST}`)"
+      - "traefik.http.routers.nca-toolkit.entrypoints=web"
+      - "traefik.http.routers.nca-toolkit.service=nca-toolkit"
+      - "traefik.http.services.nca-toolkit.loadbalancer.server.port=8080"
+
+  intelligent-cropper:
+    build:
+      context: ./cropper
+      dockerfile: Dockerfile
+    container_name: n8n-intelligent-cropper
+    restart: unless-stopped
+    profiles:
+      - core
+    networks:
+      - n8n-network
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./videos:/app/videos
+    environment:
+      - PROCESSING_MODE=mediapipe
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.intelligent-cropper.rule=Host(`${CROPPER_HOST}`)"
+      - "traefik.http.routers.intelligent-cropper.entrypoints=web"
+      - "traefik.http.routers.intelligent-cropper.service=intelligent-cropper"
+      - "traefik.http.services.intelligent-cropper.loadbalancer.server.port=8888"
+
+  n8n-mcp:
+    image: ghcr.io/czlonkowski/n8n-mcp:latest
+    container_name: n8n-mcp-server
+    restart: unless-stopped
+    profiles:
+      - core
+    networks:
+      - n8n-network
+    environment:
+      # Core MCP Configuration
+      - MCP_MODE=stdio
+      - LOG_LEVEL=error
+      - DISABLE_CONSOLE_OUTPUT=true
+      # N8N API Integration (Full Management Tools)
+      - N8N_API_URL=http://n8n:5678
+      - N8N_API_KEY=${N8N_API_KEY}
+      # Enable Full N8N Management Features
+      - ENABLE_WORKFLOW_MANAGEMENT=true
+      - ENABLE_EXECUTION_MANAGEMENT=true
+      - ENABLE_NODE_ANALYSIS=true
+      - ENABLE_SYSTEM_TOOLS=true
+      - ENABLE_VALIDATION_TOOLS=true
+      # Performance and Caching
+      - CACHE_WORKFLOWS=true
+      - CACHE_NODES=true
+      - MAX_WORKFLOW_SIZE=10MB
+      # Security and Limits
+      - VALIDATE_WORKFLOWS=true
+      - MAX_EXECUTIONS_PER_QUERY=100
+      - ENABLE_HEALTH_CHECKS=true
+    stdin_open: true
+    tty: true
+    init: true
+    depends_on:
+      n8n:
+        condition: service_healthy
+    volumes:
+      # Optional: Mount for configuration persistence
+      - ./data/n8n-mcp-cache:/app/cache
+    healthcheck:
+      test: ["CMD", "node", "-e", "console.log('MCP Server Health Check')"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  stable-diffusion:
+    image: ghcr.io/ai-dock/stable-diffusion-webui:latest-rocm
+    container_name: n8n-stable-diffusion
+    restart: unless-stopped
+    profiles:
+      - anim
+    networks:
+      - n8n-network
+    ports:
+      - "7860:7860"
+    volumes:
+      - ./stable-diffusion-data:/data
+      - ./stable-diffusion-models:/opt/stable-diffusion-webui/models
+      - ./stable-diffusion-outputs:/opt/stable-diffusion-webui/outputs
+      - ./stable-diffusion-extensions:/opt/stable-diffusion-webui/extensions
+      - ./caches/sd-pip:/root/.cache/pip:rw
+      - ./caches/sd-conda:/opt/conda/pkgs:rw
+    environment:
+      - HSA_OVERRIDE_GFX_VERSION=10.3.0
+      - HIP_VISIBLE_DEVICES=0
+      - ROCR_VISIBLE_DEVICES=0
+      - HSA_ENABLE_SDMA=0
+      - PYTORCH_HIP_ALLOC_CONF=expandable_segments:True,garbage_collection_threshold:0.6,max_split_size_mb:64
+      - HIP_MEMORY_POOL_TRIM_ENABLE=1
+      - ROCM_PATH=/opt/rocm
+      - PATH=/opt/rocm/bin:/usr/bin:$PATH
+      - LD_LIBRARY_PATH=/opt/rocm/lib:/usr/lib64:$LD_LIBRARY_PATH
+      - WEBUI_PORT=7860
+      - WEBUI_HOST=0.0.0.0
+      - WEBUI_VERSION=stable
+    command: >
+      bash -c "
+      echo 'Starting Memory-Optimized Stable Diffusion with ROCm';
+
+      export PIP_CACHE_DIR=/root/.cache/pip;
+
+      echo 'Installing PyTorch ROCm for AMD RX 6800M...';
+      pip uninstall -y torch torchvision torchaudio || true;
+      pip install torch==2.5.1+rocm6.2 torchvision==0.20.1+rocm6.2 torchaudio==2.5.1+rocm6.2 --index-url https://download.pytorch.org/whl/rocm6.2;
+
+      pip install 'numpy<2.0' || echo 'NumPy install failed';
+
+      echo 'PyTorch Status:';
+      python3 -c 'import torch; print(f\"PyTorch: {torch.__version__}\"); print(f\"CUDA available: {torch.cuda.is_available()}\"); print(f\"Device count: {torch.cuda.device_count()}\")' || echo 'PyTorch check failed';
+
+      echo 'Checking AnimateDiff extension...';
+      if [ ! -d '/opt/stable-diffusion-webui/extensions/sd-webui-animatediff' ]; then
+        echo 'Installing AnimateDiff extension...';
+        cd /opt/stable-diffusion-webui/extensions && git clone https://github.com/continue-revolution/sd-webui-animatediff.git;
+      fi;
+
+      echo 'Starting WebUI with ROCm optimization...';
+      cd /opt/stable-diffusion-webui && python3 launch.py --listen --port 7860 --api --skip-torch-cuda-test --precision full --no-half --lowvram --medvram-sdxl --opt-sdp-attention --always-batch-cond-uncond --enable-insecure-extension-access;
+      "
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri/card1:/dev/dri/card0
+      - /dev/dri/renderD128:/dev/dri/renderD128
+    security_opt:
+      - seccomp:unconfined
+    group_add:
+      - video
+    ipc: host
+    cap_add:
+      - SYS_PTRACE
+    shm_size: "16gb"
+    deploy:
+      resources:
+        limits:
+          memory: 32G
+        reservations:
+          memory: 8G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860/"]
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 300s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.stable-diffusion.rule=Host(`${STABLE_DIFFUSION_HOST}`)"
+      - "traefik.http.routers.stable-diffusion.entrypoints=web"
+      - "traefik.http.routers.stable-diffusion.service=stable-diffusion"
+      - "traefik.http.services.stable-diffusion.loadbalancer.server.port=7860"
+
+  stable-video-diffusion:
+    image: ghcr.io/ai-dock/comfyui:latest-rocm
+    container_name: n8n-stable-video-diffusion
+    restart: unless-stopped
+    profiles:
+      - anim
+    networks:
+      - n8n-network
+    ports:
+      - "8188:8188"
+    volumes:
+      - ./svd-data:/data
+      - ./svd-models:/opt/ComfyUI/models
+      - ./svd-outputs:/opt/ComfyUI/output
+      - ./caches/svd-pip:/root/.cache/pip:rw
+      - ./caches/svd-huggingface:/root/.cache/huggingface:rw
+    environment:
+      - HSA_OVERRIDE_GFX_VERSION=10.3.0
+      - HIP_VISIBLE_DEVICES=0
+      - ROCR_VISIBLE_DEVICES=0
+      - HSA_ENABLE_SDMA=0
+      - PYTORCH_HIP_ALLOC_CONF=expandable_segments:True,garbage_collection_threshold:0.6
+      - HIP_MEMORY_POOL_TRIM_ENABLE=1
+      - ROCM_PATH=/opt/rocm
+      - PATH=/opt/rocm/bin:/usr/bin:$PATH
+      - LD_LIBRARY_PATH=/opt/rocm/lib:/usr/lib64:$LD_LIBRARY_PATH
+      - COMFYUI_PORT=8188
+      - COMFYUI_HOST=0.0.0.0
+      - WORKSPACE=/opt/ComfyUI
+    command: |
+      bash -c '
+      echo "Starting Stable Video Diffusion with ROCm on RX 6800M"
+
+      export PIP_CACHE_DIR=/root/.cache/pip
+
+      if python3 -c "import torch; exit(0 if \"rocm\" in torch.__version__ and torch.cuda.is_available() else 1)" 2>/dev/null; then
+        echo "✅ Working ROCm PyTorch already installed"
+        python3 -c "import torch; print(f\"PyTorch: {torch.__version__}\"); print(f\"GPU available: {torch.cuda.is_available()}\")"
+      else
+        echo "Installing ROCm PyTorch..."
+        pip uninstall -y torch torchvision torchaudio || true
+        pip install torch==2.5.1+rocm6.2 torchvision==0.20.1+rocm6.2 torchaudio==2.5.1+rocm6.2 --index-url https://download.pytorch.org/whl/rocm6.2
+        pip install pytorch-triton-rocm==2.1.0 || echo "Triton install failed, continuing..."
+      fi
+
+      echo "Installing additional dependencies..."
+      pip install scipy psutil einops transformers diffusers accelerate safetensors torchsde
+
+      echo "Verifying PyTorch installation..."
+      python3 -c "import torch; print(f\"PyTorch: {torch.__version__}\"); print(f\"GPU available: {torch.cuda.is_available()}\"); print(f\"Device count: {torch.cuda.device_count()}\")"
+
+      mkdir -p /opt/ComfyUI/models/checkpoints /opt/ComfyUI/models/vae /opt/ComfyUI/models/unet
+
+      echo "Checking for SVD models..."
+      SVD_XT_MODEL="/opt/ComfyUI/models/checkpoints/svd_xt.safetensors"
+
+      if [ -f "$SVD_XT_MODEL" ]; then
+        model_size=$(stat -c%s "$SVD_XT_MODEL" 2>/dev/null || echo 0)
+        if [ "$model_size" -gt 9000000000 ]; then
+          echo "✅ SVD model already present ($(du -h \"$SVD_XT_MODEL\" | cut -f1))"
+        else
+          echo "Model incomplete, will re-download"
+          rm -f "$SVD_XT_MODEL"
+        fi
+      fi
+
+      if [ ! -f "$SVD_XT_MODEL" ]; then
+        echo "Downloading SVD-XT model (~9.5GB)..."
+        cd /opt/ComfyUI/models/checkpoints
+        wget -c -O svd_xt.safetensors.tmp "https://huggingface.co/stabilityai/stable-video-diffusion-img2vid-xt/resolve/main/svd_xt.safetensors"
+
+        if [ $? -eq 0 ] && [ -f "svd_xt.safetensors.tmp" ]; then
+          tmp_size=$(stat -c%s "svd_xt.safetensors.tmp" 2>/dev/null || echo 0)
+          if [ "$tmp_size" -gt 9000000000 ]; then
+            mv svd_xt.safetensors.tmp svd_xt.safetensors
+            echo "✅ SVD model downloaded successfully"
+          else
+            rm -f svd_xt.safetensors.tmp
+            echo "❌ Download incomplete"
+          fi
+        fi
+      fi
+
+      echo "Starting ComfyUI..."
+      cd /opt/ComfyUI && python3 main.py --listen 0.0.0.0 --port 8188 --cpu-vae --lowvram
+      '
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri/card1:/dev/dri/card0
+      - /dev/dri/renderD128:/dev/dri/renderD128
+    security_opt:
+      - seccomp:unconfined
+    group_add:
+      - video
+    ipc: host
+    cap_add:
+      - SYS_PTRACE
+    shm_size: "8gb"
+    deploy:
+      resources:
+        limits:
+          memory: 24G
+          cpus: "6.0"
+        reservations:
+          memory: 8G
+          cpus: "2.0"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8188/"]
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 300s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.svd.rule=Host(`${SVD_HOST}`)"
+      - "traefik.http.routers.svd.entrypoints=web"
+      - "traefik.http.routers.svd.service=svd"
+      - "traefik.http.services.svd.loadbalancer.server.port=8188"
+
+  wan21-video:
+    image: ghcr.io/ai-dock/comfyui:latest-rocm
+    container_name: n8n-wan21-video
+    restart: unless-stopped
+    profiles:
+      - anim
+    networks:
+      - n8n-network
+    environment:
+      - HSA_OVERRIDE_GFX_VERSION=10.3.0
+      - HIP_VISIBLE_DEVICES=0
+      - ROCR_VISIBLE_DEVICES=0
+      - HSA_ENABLE_SDMA=0
+      - PYTORCH_HIP_ALLOC_CONF=expandable_segments:True,garbage_collection_threshold:0.6
+      - HIP_MEMORY_POOL_TRIM_ENABLE=1
+      - ROCM_PATH=/opt/rocm
+      - PATH=/opt/rocm/bin:/usr/bin:$PATH
+      - LD_LIBRARY_PATH=/opt/rocm/lib:/usr/lib64:$LD_LIBRARY_PATH
+      - COMFYUI_PORT=8189
+      - COMFYUI_HOST=0.0.0.0
+      - WORKSPACE=/opt/ComfyUI
+      - CUDA_VISIBLE_DEVICES=""
+      - HIP_FORCE_DEV_KERNARG=1
+      - TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1
+      - PYTORCH_TUNABLEOP_ENABLED=1
+    volumes:
+      - ./wan21-data:/data:rw
+      - ./wan21-models:/opt/ComfyUI/models:rw
+      - ./wan21-outputs:/opt/ComfyUI/output:rw
+      - ./wan21-custom-nodes:/opt/ComfyUI/custom_nodes:rw
+      - ./caches/wan21-pip:/root/.cache/pip:rw
+      - ./caches/wan21-huggingface:/root/.cache/huggingface:rw
+      - ./caches/wan21-torch:/root/.cache/torch:rw
+      - ./caches/wan21-conda:/opt/conda/pkgs:rw
+    ports:
+      - "8189:8189"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.wan21-video.rule=Host(`${WAN21_HOST}`)"
+      - "traefik.http.routers.wan21-video.entrypoints=web"
+      - "traefik.http.routers.wan21-video.service=wan21-video"
+      - "traefik.http.services.wan21-video.loadbalancer.server.port=8189"
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri/card1:/dev/dri/card0
+      - /dev/dri/renderD128:/dev/dri/renderD128
+    security_opt:
+      - seccomp:unconfined
+    group_add:
+      - video
+    ipc: host
+    cap_add:
+      - SYS_PTRACE
+    command: |
+      bash -c '
+      echo "🔧 Starting Wan2.1 Video Generation with ROCm on RX 6800M"
+
+      export PIP_CACHE_DIR=/root/.cache/pip
+
+      echo "Installing ComfyUI base dependencies..."
+      pip install torch torchvision torchaudio torchsde numpy einops transformers tokenizers sentencepiece safetensors aiohttp yarl pyyaml Pillow scipy tqdm psutil || echo "Base dependency installation failed, continuing..."
+
+      echo "Installing additional video dependencies..."
+      pip install accelerate diffusers kornia spandrel soundfile av pydantic pydantic-settings || echo "Additional dependencies failed, continuing..."
+
+      echo "Installing OpenCV + ControlNet dependencies..."
+      pip install opencv-python opencv-contrib-python matplotlib seaborn plotly scikit-image || echo "OpenCV + plotting dependencies failed, continuing..."
+
+      echo "Installing PyTorch ROCm (if needed)..."
+      python3 -c "import torch; print(f\"Current PyTorch: {torch.__version__}\")" || echo "PyTorch check failed"
+
+      if ! python3 -c "import torch; exit(0 if \"rocm\" in torch.__version__ else 1)" 2>/dev/null; then
+        echo "Installing correct PyTorch with ROCm support..."
+        pip uninstall -y torch torchvision torchaudio
+        pip install --force-reinstall torch==2.5.1+rocm6.2 torchvision==0.20.1+rocm6.2 torchaudio==2.5.1+rocm6.2 --index-url https://download.pytorch.org/whl/rocm6.2
+      else
+        echo "PyTorch ROCm already installed"
+      fi
+
+      echo "Setting up Wan2.1 models directory structure..."
+      mkdir -p /opt/ComfyUI/models/checkpoints
+      mkdir -p /opt/ComfyUI/models/diffusion_models
+      mkdir -p /opt/ComfyUI/models/vae
+      mkdir -p /opt/ComfyUI/models/text_encoders
+      mkdir -p /opt/ComfyUI/models/clip_vision
+      mkdir -p /opt/ComfyUI/models/unet
+      mkdir -p /opt/ComfyUI/custom_nodes
+
+      echo "Testing GPU detection..."
+      python3 -c "import torch; print(f\"CUDA available: {torch.cuda.is_available()}\"); print(f\"Device count: {torch.cuda.device_count()}\");" || echo "GPU detection failed"
+
+      echo "Testing ROCm installation..."
+      python3 -c "import torch; print(f\"ROCm available: {torch.version.hip is not None}\")" || echo "ROCm test failed"
+
+      echo "Starting ComfyUI for Wan2.1 Video Generation..."
+      cd /opt/ComfyUI && python3 main.py --listen 0.0.0.0 --port 8189 --cpu-vae --lowvram --use-pytorch-cross-attention
+      '
+    shm_size: "8gb"
+    deploy:
+      resources:
+        limits:
+          memory: 20G
+          cpus: "8.0"
+        reservations:
+          memory: 8G
+          cpus: "4.0"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8189/"]
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 300s
+
+  cogvideo:
+    image: rocm/pytorch:latest
+    # image: ghcr.io/ai-dock/comfyui:latest-rocm
+    # image: rocm/pytorch:rocm6.0_ubuntu22.04_py3.10_pytorch_2.1.1  # More stable
+    container_name: n8n-cogvideo
+    restart: unless-stopped
+    profiles:
+      - anim
+    networks:
+      - n8n-network
+    environment:
+      - HSA_OVERRIDE_GFX_VERSION=10.3.1
+      - HIP_VISIBLE_DEVICES=""
+      - ROCR_VISIBLE_DEVICES=""
+      - CUDA_VISIBLE_DEVICES=""
+      - HSA_ENABLE_SDMA=0
+      # Memory management - simplified for older PyTorch versions
+      # - PYTORCH_HIP_ALLOC_CONF=expandable_segments:True,garbage_collection_threshold:0.6
+      # Backup memory strategies
+      # - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+      # 💡 If ROCm memory errors persist, try adding: ROCM_DISABLE_HIPBLASLT=1
+      - HIP_MEMORY_POOL_TRIM_ENABLE=1
+      - ROCM_PATH=/opt/rocm
+      - PATH=/opt/rocm/bin:/usr/bin:$PATH
+      - LD_LIBRARY_PATH=/opt/rocm/lib:/usr/lib64:$LD_LIBRARY_PATH
+      - COMFYUI_PORT=8190
+      - COMFYUI_HOST=0.0.0.0
+      - WORKSPACE=/opt/ComfyUI
+      - HIP_FORCE_DEV_KERNARG=1
+      - TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1
+      - PYTORCH_TUNABLEOP_ENABLED=1
+      # Additional ROCm optimizations
+      - ROCBLAS_LAYER=1
+      - HIPBLASLT_LOG_LEVEL=0
+      - HIPBLASLT_TENSILE_LIBPATH=/opt/rocm/lib/hipblaslt/library/
+      - PYTORCH_ROCM_ARCH=gfx1031
+      - ROCM_DISABLE_HIPBLASLT=1
+      # Add these debug flags to your docker-compose
+      - AMD_SERIALIZE_KERNEL=3  # Better HIP error reporting
+      - TORCH_USE_HIP_DSA=1     # Device-side assertions
+      - HSA_ENABLE_INTERRUPT=0  # Disable interrupts that can cause issues
+      # Force specific GPU architecture
+      - HSA_FORCE_DEVICE_CONFIG=gfx1031
+      # Disable GPU entirely for ComfyUI
+      - COMFYUI_DISABLE_CUDA=1
+      - PYTORCH_DISABLE_CUDA=1
+    volumes:
+      - ./cogvideo-data:/data:rw
+      - ./cogvideo-models:/opt/ComfyUI/models:rw
+      - ./cogvideo-outputs:/opt/ComfyUI/output:rw
+      - ./cogvideo-custom-nodes:/opt/ComfyUI/custom_nodes:rw
+      - ./caches/cogvideo-pip:/app/cache/pip:rw
+      - ./caches/cogvideo-huggingface:/app/cache/huggingface:rw
+      - ./caches/cogvideo-torch:/app/cache/torch:rw
+      # 🔧 UPDATE: Use the new fixed startup script (v38)
+      - ./startup-cache-v41.sh:/startup-cache.sh:ro
+      - ./comfyui-install:/opt/ComfyUI-core:ro
+    ports:
+      - "8190:8190"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.cogvideo.rule=Host(`${COGVIDEO_HOST}`)"
+      - "traefik.http.routers.cogvideo.entrypoints=web"
+      - "traefik.http.routers.cogvideo.service=cogvideo"
+      - "traefik.http.services.cogvideo.loadbalancer.server.port=8190"
+    devices:
+      # 🔧 CORRECTED: Use card1 as specified by user
+      - /dev/kfd:/dev/kfd
+      - /dev/dri/card1:/dev/dri/card0
+      - /dev/dri/renderD128:/dev/dri/renderD128
+    security_opt:
+      - seccomp:unconfined
+    group_add:
+      - video
+    ipc: host
+    cap_add:
+      - SYS_PTRACE
+    command: bash /startup-cache.sh
+    shm_size: "8gb"
+    deploy:
+      resources:
+        limits:
+          memory: 18G
+          cpus: "8.0"
+        reservations:
+          memory: 6G
+          cpus: "4.0"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8190/"]
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 300s

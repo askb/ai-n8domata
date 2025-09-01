@@ -1,0 +1,81 @@
+name: Lint
+
+on:
+  push:
+    branches: [ master, main, develop ]
+  pull_request:
+    branches: [ master, main, develop ]
+
+jobs:
+  python-lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install black isort flake8 pylint bandit safety
+
+    - name: Run Black
+      run: black --check --diff .
+
+    - name: Run isort
+      run: isort --check-only --diff .
+
+    - name: Run flake8
+      run: flake8 .
+
+    - name: Run pylint on Python services
+      run: |
+        find . -name "*.py" -path "./queue-metrics/*" -o -path "./dynamic-scaler/*" | xargs pylint || true
+
+    - name: Run bandit security check
+      run: bandit -r . -f json -o bandit-report.json || true
+
+    - name: Upload bandit results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: bandit-results
+        path: bandit-report.json
+
+  dockerfile-lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Run Hadolint
+      uses: hadolint/hadolint-action@v3.1.0
+      with:
+        dockerfile: |
+          Dockerfile
+          Dockerfile.queue-metrics
+          dynamic-scaler/Dockerfile
+        failure-threshold: warning
+
+  yaml-lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install yamllint
+      run: pip install yamllint
+
+    - name: Run yamllint
+      run: yamllint .
+
+  shell-lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Run ShellCheck
+      uses: ludeeus/action-shellcheck@master
+      with:
+        scandir: './utils'
