@@ -1,4 +1,5 @@
 """Configuration management for Queue Metrics service."""
+
 import os
 from typing import Optional
 

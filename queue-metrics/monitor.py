@@ -1,4 +1,5 @@
 """Main queue monitoring service."""
+
 import logging
 import signal
 import sys

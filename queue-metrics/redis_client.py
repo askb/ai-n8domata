@@ -1,4 +1,5 @@
 """Redis client wrapper for queue monitoring."""
+
 import logging
 from typing import Optional
 

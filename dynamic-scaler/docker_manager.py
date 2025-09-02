@@ -1,4 +1,5 @@
 """Docker management for service scaling."""
+
 import subprocess
 from typing import Optional
 

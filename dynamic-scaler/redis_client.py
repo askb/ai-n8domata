@@ -1,4 +1,5 @@
 """Redis client for queue monitoring in Dynamic Scaler."""
+
 from typing import Optional
 
 import redis

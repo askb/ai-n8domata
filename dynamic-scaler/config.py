@@ -1,4 +1,5 @@
 """Configuration management for Dynamic Scaler service."""
+
 import os
 from typing import Optional
 

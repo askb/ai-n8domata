@@ -1,4 +1,5 @@
 """Main dynamic scaling service."""
+
 import logging
 import signal
 import sys
