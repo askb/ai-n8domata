@@ -52,20 +52,20 @@ jobs:
 
     - name: Create required directories and symlinks
       run: |
-        mkdir -p /tmp/ai-automata-data/{backups,caches,daily-backups,data,postgres-data,videos}
-        mkdir -p /tmp/ai-automata-data/{wan21-data,wan21-outputs,wan21-models,wan21-custom-nodes}
-        mkdir -p /tmp/ai-automata-data/{cogvideo-data,cogvideo-outputs,cogvideo-custom-nodes}
-        mkdir -p /tmp/ai-automata-data/{stable-diffusion-data,stable-diffusion-extensions,stable-diffusion-models,stable-diffusion-outputs}
-        mkdir -p /tmp/ai-automata-data/{svd-data,svd-models,svd-outputs,svd-workflows}
-        mkdir -p /tmp/ai-automata-data/comfyui-install
+        mkdir -p /tmp/ai-n8domata-data/{backups,caches,daily-backups,data,postgres-data,videos}
+        mkdir -p /tmp/ai-n8domata-data/{wan21-data,wan21-outputs,wan21-models,wan21-custom-nodes}
+        mkdir -p /tmp/ai-n8domata-data/{cogvideo-data,cogvideo-outputs,cogvideo-custom-nodes}
+        mkdir -p /tmp/ai-n8domata-data/{stable-diffusion-data,stable-diffusion-extensions,stable-diffusion-models,stable-diffusion-outputs}
+        mkdir -p /tmp/ai-n8domata-data/{svd-data,svd-models,svd-outputs,svd-workflows}
+        mkdir -p /tmp/ai-n8domata-data/comfyui-install
 
         # Create symlinks
-        ln -sf /tmp/ai-automata-data/backups backups
-        ln -sf /tmp/ai-automata-data/caches caches
-        ln -sf /tmp/ai-automata-data/daily-backups daily-backups
-        ln -sf /tmp/ai-automata-data/data data
-        ln -sf /tmp/ai-automata-data/postgres-data postgres-data
-        ln -sf /tmp/ai-automata-data/videos videos
+        ln -sf /tmp/ai-n8domata-data/backups backups
+        ln -sf /tmp/ai-n8domata-data/caches caches
+        ln -sf /tmp/ai-n8domata-data/daily-backups daily-backups
+        ln -sf /tmp/ai-n8domata-data/data data
+        ln -sf /tmp/ai-n8domata-data/postgres-data postgres-data
+        ln -sf /tmp/ai-n8domata-data/videos videos
 
     - name: Copy env example to env
       run: cp env.example .env

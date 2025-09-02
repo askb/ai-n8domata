@@ -193,18 +193,12 @@ Complete reference for all services in the N8N AI Services Platform.
 
 ### AI Agents ROCm (`n8n-ai-agent-rocm`)
 
-**GPU-accelerated AI processing (AMD ROCm)**
+**GPU-accelerated AI processing (Not supported in current version)**
 
 - **Port:** 8008
-- **Profile:** `disabled` (experimental)
-- **GPU Requirements:** AMD RX 6000+ series
-- **Configuration:**
-
-  ```bash
-  HSA_OVERRIDE_GFX_VERSION=10.3.1
-  HIP_VISIBLE_DEVICES=0
-  PYTORCH_HIP_ALLOC_CONF=expandable_segments:True
-  ```
+- **Profile:** `disabled` (not functional with CogVideo and other services)
+- **Status:** Removed due to compatibility issues
+- **Note:** Use CPU version instead
 
 ### Short Video Maker CPU (`n8n-short-video-maker-cpu`)
 
@@ -222,18 +216,11 @@ Complete reference for all services in the N8N AI Services Platform.
 
 ### Short Video Maker ROCm (`n8n-short-video-maker-rocm`)
 
-**GPU-accelerated video generation**
+**GPU-accelerated video generation (Not supported in current version)**
 
-- **Profile:** `disabled` (resource-intensive)
-- **GPU Requirements:** AMD RX 6000+ with 8GB+ VRAM
-- **Features:** Hardware-accelerated encoding, medium Whisper model
-- **Configuration:**
-
-  ```bash
-  WHISPER_MODEL=medium.en
-  WHISPER_USE_GPU=true
-  HSA_OVERRIDE_GFX_VERSION=10.3.0
-  ```
+- **Profile:** `disabled` (not functional with CogVideo and other services)
+- **Status:** Removed due to compatibility issues
+- **Note:** Use CPU version instead
 
 ### Kokoro TTS (`n8n-kokoro-tts`)
 
@@ -278,30 +265,30 @@ Complete reference for all services in the N8N AI Services Platform.
 
 ### Stable Video Diffusion (`n8n-stable-video-diffusion`)
 
-**Video generation with Stable Video Diffusion**
+**Video generation with Stable Video Diffusion (CPU-only in current version)**
 
 - **Port:** 8188
 - **Profile:** `anim`
 - **Engine:** ComfyUI-based
 - **Model:** SVD-XT (9.5GB download)
-- **GPU Requirements:** 12GB+ VRAM recommended
+- **Processing:** CPU-only (GPU support coming in future versions)
 
 ### WAN2.1 Video (`n8n-wan21-video`)
 
-**Advanced video generation with WAN2.1**
+**Advanced video generation with WAN2.1 (CPU-only in current version)**
 
 - **Port:** 8189
 - **Profile:** `anim`
 - **Features:** State-of-the-art video generation
-- **GPU:** ROCm-optimized
+- **Processing:** CPU-only (GPU support coming in future versions)
 
 ### CogVideo (`n8n-cogvideo`)
 
-**Experimental video generation**
+**Experimental video generation (CPU-only in current version)**
 
 - **Port:** 8190
 - **Profile:** `anim`
-- **Status:** Experimental
+- **Status:** CPU-only processing
 - **Features:** Alternative video generation approach
 
 ## 🛠️ Utility Services

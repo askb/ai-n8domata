@@ -44,8 +44,8 @@ Expected output: `Docker version 24.0+` and `Docker Compose version v2.20+`
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/ai-automata.git
-cd ai-automata
+git clone https://github.com/askb/ai-n8domata.git
+cd ai-n8domata
 
 # Initialize AI service submodules
 git submodule update --init --recursive
@@ -335,8 +335,9 @@ docker stats
 # Verify model downloads
 docker compose logs n8n-short-video-maker-cpu | grep -i download
 
-# GPU issues (if using GPU services)
-docker run --rm --device=/dev/kfd --device=/dev/dri rocm/pytorch:latest rocminfo
+# Check CPU resources (current version is CPU-only)
+nproc
+free -h
 ```
 
 ## 🎉 Next Steps
@@ -358,8 +359,8 @@ docker run --rm --device=/dev/kfd --device=/dev/dri rocm/pytorch:latest rocminfo
 
 ### Community and Support
 
-- 🐛 **Issues:** [GitHub Issues](https://github.com/yourusername/ai-automata/issues)
-- 💬 **Discussions:** [GitHub Discussions](https://github.com/yourusername/ai-automata/discussions)
+- 🐛 **Issues:** [GitHub Issues](https://github.com/askb/ai-n8domata/issues)
+- 💬 **Discussions:** [GitHub Discussions](https://github.com/askb/ai-n8domata/discussions)
 - 📧 **Email:** <support@yourdomain.com>
 
 ## 🎯 Success Checklist

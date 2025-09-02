@@ -238,7 +238,7 @@ COOLDOWN_PERIOD: 120 seconds
 
 ### Future Enhancements
 
-1. **GPU Services**: Enable ROCm services for AMD GPU acceleration
+1. **CPU Processing**: Current version uses CPU-only processing (GPU support coming in future versions)
 2. **Monitoring Dashboard**: Integrate Grafana for advanced metrics
 3. **Backup Automation**: Verify automated backup procedures
 4. **Performance Optimization**: Fine-tune resource limits

@@ -4,15 +4,19 @@ This directory contains utility scripts organized by function to help manage and
 
 ## Directory Structure
 
-### 🖥️ GPU Utilities (`/gpu`)
+### 🖥️ GPU Utilities (`/gpu`) - DEPRECATED
 
-Scripts for GPU setup, diagnostics, and ROCm management:
+**Note: GPU support has been removed from current version due to compatibility issues.**
 
-- `gpu-diagnostics.sh` - Hardware diagnostic script for RX 6800M
-- `activate-rx-6800M.sh` - GPU activation utilities
-- `host-setup*.sh` - Host system setup for ROCm + Stable Diffusion
-- `quick-rocm-fix.sh` - Quick fixes for ROCm issues
-- `test-rocm-pytorch.sh` - PyTorch ROCm testing utilities
+Legacy scripts (not functional in current version):
+
+- `gpu-diagnostics.sh` - Legacy GPU diagnostic script
+- `activate-rx-6800M.sh` - Legacy GPU activation utilities  
+- `host-setup*.sh` - Legacy host system setup scripts
+- `quick-rocm-fix.sh` - Legacy ROCm fixes
+- `test-rocm-pytorch.sh` - Legacy PyTorch testing utilities
+
+**Current version uses CPU-only processing.**
 
 ### 💾 Backup Utilities (`/backup`)
 
@@ -66,7 +70,7 @@ chmod +x utils/category/script-name.sh
 - Always review scripts before running them
 - Most maintenance scripts require the services to be running
 - Backup scripts should be run regularly
-- GPU scripts are optimized for AMD RX 6800M hardware
+- GPU scripts are deprecated and not functional in current CPU-only version
 
 ## Environment Variables
 

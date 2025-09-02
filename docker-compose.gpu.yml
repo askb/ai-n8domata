@@ -1,0 +1,615 @@
+# Only keep traefik volume since it still uses named volume
+volumes:
+  traefik_data:
+
+networks:
+  n8n-network:
+    driver: bridge
+
+x-n8n: &service-n8n
+  build:
+    context: .
+    dockerfile: Dockerfile
+  profiles:
+    - core
+  user: root:root
+  restart: unless-stopped
+  networks:
+    - n8n-network
+  environment:
+    - N8N_DIAGNOSTICS_ENABLED=${N8N_DIAGNOSTICS_ENABLED}
+    - N8N_USER_FOLDER=${N8N_USER_FOLDER}
+    - N8N_SECURE_COOKIE=${N8N_SECURE_COOKIE}
+    - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=${N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS}
+    - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+    - N8N_HOST=${N8N_HOST}
+    - N8N_PROTOCOL=${N8N_PROTOCOL}
+    - N8N_WEBHOOK=${N8N_WEBHOOK}
+    - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL}
+    - WEBHOOK_URL=${WEBHOOK_URL}
+    - N8N_EDITOR_BASE_URL=${N8N_EDITOR_BASE_URL}
+    # Queue mode config
+    - EXECUTIONS_MODE=${EXECUTIONS_MODE}
+    - QUEUE_BULL_REDIS_HOST=${QUEUE_BULL_REDIS_HOST}
+    - QUEUE_HEALTH_CHECK_ACTIVE=${QUEUE_HEALTH_CHECK_ACTIVE}
+    - N8N_QUEUE_BULL_GRACEFULSHUTDOWNTIMEOUT=${N8N_QUEUE_BULL_GRACEFULSHUTDOWNTIMEOUT}
+    - N8N_GRACEFUL_SHUTDOWN_TIMEOUT=${N8N_GRACEFUL_SHUTDOWN_TIMEOUT}
+    # DB config
+    - DB_TYPE=${DB_TYPE}
+    - DB_POSTGRESDB_HOST=${POSTGRES_HOST}
+    - DB_POSTGRESDB_DATABASE=${POSTGRES_DB}
+    - DB_POSTGRESDB_USER=${POSTGRES_USER}
+    - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
+    # Task Runner config
+    - OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS=${OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS}
+    - N8N_RUNNERS_AUTH_TOKEN=${N8N_RUNNERS_AUTH_TOKEN}
+    - N8N_TASK_BROKER_URL=${N8N_TASK_BROKER_URL}
+    - N8N_COMMAND_RESPONSE_URL=${N8N_COMMAND_RESPONSE_URL}
+    - N8N_TASK_BROKER_PORT=${N8N_TASK_BROKER_PORT}
+    - NODE_FUNCTION_ALLOW_EXTERNAL=ajv,ajv-formats,puppeteer
+    - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+    # BINARY DATA CONFIGURATION - ADD THESE LINES
+    - N8N_DEFAULT_BINARY_DATA_MODE=filesystem
+    - N8N_BINARY_DATA_TTL=1440
+    - N8N_BINARY_DATA_STORAGE_PATH=/home/node/.n8n/binaryData
+
+services:
+  short-video-maker-rocm:
+    build:
+      context: ./services/short-video-maker
+      dockerfile: pytorch-whisper-complete.Dockerfile
+    container_name: n8n-short-video-maker-rocm
+    restart: unless-stopped
+    profiles:
+      - disabled
+    networks:
+      - n8n-network
+    environment:
+      - LOG_LEVEL=info
+      - PEXELS_API_KEY=${PEXELS_API_KEY}
+      # Enable GPU-accelerated medium model (like CUDA variant)
+      - WHISPER_MODEL=medium.en
+      - WHISPER_USE_GPU=true
+      - DOCKER=false  # Changed from true to false
+
+      # ROCm settings optimized for RX 6800M (gfx1031) - compatible with rocm/pytorch:latest
+      - HSA_OVERRIDE_GFX_VERSION=10.3.0  # Use gfx1030 libraries for gfx1031 hardware
+      - HIP_VISIBLE_DEVICES=0
+      - ROCR_VISIBLE_DEVICES=0
+      - HSA_ENABLE_SDMA=0
+      - ROCM_PATH=/opt/rocm
+      - PATH=/opt/rocm/bin:/usr/bin:$PATH
+      - LD_LIBRARY_PATH=/opt/rocm/lib:/usr/lib64
+      - PYTORCH_ROCM_ARCH=gfx1031  # Proper architecture targeting
+
+      # Memory optimization (corrected for PyTorch 2.6+)
+      - PYTORCH_HIP_ALLOC_CONF=expandable_segments:True,garbage_collection_threshold:0.6
+      - HIP_MEMORY_POOL_TRIM_ENABLE=1
+      - TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1
+      - PYTORCH_TUNABLEOP_ENABLED=1
+      - ROCBLAS_LAYER=1
+
+      # App-specific
+      - CONCURRENCY=1
+      - VIDEO_CACHE_SIZE_IN_BYTES=1073741824
+    volumes:
+      - ./videos:/app/data/videos
+      - ./caches/svm-pip:/root/.cache/pip:rw
+      - ./caches/svm-huggingface:/root/.cache/huggingface:rw  # Cache for model downloads
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri/card1:/dev/dri/card0  # Map discrete GPU (12.8GB VRAM) as primary
+      - /dev/dri/card2:/dev/dri/card1  # Map integrated GPU as secondary
+      - /dev/dri/renderD128:/dev/dri/renderD128
+      - /dev/dri/renderD129:/dev/dri/renderD129
+    security_opt:
+      - seccomp:unconfined
+    group_add:
+      - video
+    ipc: host
+    cap_add:
+      - SYS_PTRACE
+    shm_size: "4gb"
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+          cpus: "6.0"
+        reservations:
+          memory: 6G  # Increased for PyTorch + model loading
+          cpus: "2.0"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3123/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s  # Increased for model download time
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.short-video-maker.rule=Host(`${SHORT_VIDEO_MAKER_HOST}`)"
+      - "traefik.http.routers.short-video-maker.entrypoints=web"
+      - "traefik.http.routers.short-video-maker.service=short-video-maker"
+      - "traefik.http.services.short-video-maker.loadbalancer.server.port=3123"
+
+  ai-agent-rocm:
+    build:
+      context: ./services/ai-agents-no-code-tools
+      dockerfile: rocm.Dockerfile
+    image: ai-agents-no-code-tools
+    container_name: n8n-ai-agent-rocm
+    restart: unless-stopped
+    profiles:
+      - disabled
+    networks:
+      - n8n-network
+    ports:
+      - "8008:8008"
+    environment:
+      - CUDA_VISIBLE_DEVICES=""
+      - HIP_VISIBLE_DEVICES=""
+      - PYTORCH_DISABLE_CUDA=1
+      - AMD_SERIALIZE_KERNEL=3
+      - TORCH_USE_HIP_DSA=1
+      # Core ROCm settings to target the correct GPU
+      - HSA_OVERRIDE_GFX_VERSION=10.3.1
+      - HIP_VISIBLE_DEVICES=0
+      - ROCR_VISIBLE_DEVICES=0
+      - HSA_ENABLE_SDMA=0
+      - ROCM_PATH=/opt/rocm
+      - PATH=/opt/rocm/bin:/usr/bin:$PATH
+      - LD_LIBRARY_PATH=/opt/rocm/lib:/usr/lib64:$LD_LIBRARY_PATH
+      # Memory optimization flags
+      - PYTORCH_HIP_ALLOC_CONF=expandable_segments:True,garbage_collection_threshold:0.6,max_split_size_mb:64
+      - HIP_MEMORY_POOL_TRIM_ENABLE=1
+    volumes:
+      - ./caches/ai-agent-pip:/root/.cache/pip:rw
+    devices:
+      - "/dev/kfd:/dev/kfd"
+      - "/dev/dri/card1:/dev/dri/card0"
+      - "/dev/dri/renderD128:/dev/dri/renderD128"
+    security_opt:
+      - seccomp:unconfined
+    group_add:
+      - video
+    ipc: host
+    cap_add:
+      - SYS_PTRACE
+    shm_size: "8gb"
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+          cpus: "6.0"
+        reservations:
+          memory: 4G
+          cpus: "2.0"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8008/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    command: >
+      bash -c "
+        echo '--- Verifying GPU Access with rocminfo ---' &&
+        rocminfo &&
+        echo '--- GPU DETECTED SUCCESSFULLY ---' &&
+        echo '--- Starting FastAPI Server ---' &&
+        fastapi run server.py --host 0.0.0.0 --port 8008
+      "
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ai-agent-rocm.rule=Host(`${AI_AGENT_HOST}`)"
+      - "traefik.http.routers.ai-agent-rocm.entrypoints=web"
+      - "traefik.http.services.ai-agent-rocm.loadbalancer.server.port=8008"
+
+  stable-diffusion:
+    image: ghcr.io/ai-dock/stable-diffusion-webui:latest-rocm
+    container_name: n8n-stable-diffusion
+    restart: unless-stopped
+    profiles:
+      - anim
+    networks:
+      - n8n-network
+    ports:
+      - "7860:7860"
+    volumes:
+      - ./stable-diffusion-data:/data
+      - ./stable-diffusion-models:/opt/stable-diffusion-webui/models
+      - ./stable-diffusion-outputs:/opt/stable-diffusion-webui/outputs
+      - ./stable-diffusion-extensions:/opt/stable-diffusion-webui/extensions
+      - ./caches/sd-pip:/root/.cache/pip:rw
+      - ./caches/sd-conda:/opt/conda/pkgs:rw
+    environment:
+      - HSA_OVERRIDE_GFX_VERSION=10.3.0
+      - HIP_VISIBLE_DEVICES=0
+      - ROCR_VISIBLE_DEVICES=0
+      - HSA_ENABLE_SDMA=0
+      - PYTORCH_HIP_ALLOC_CONF=expandable_segments:True,garbage_collection_threshold:0.6,max_split_size_mb:64
+      - HIP_MEMORY_POOL_TRIM_ENABLE=1
+      - ROCM_PATH=/opt/rocm
+      - PATH=/opt/rocm/bin:/usr/bin:$PATH
+      - LD_LIBRARY_PATH=/opt/rocm/lib:/usr/lib64:$LD_LIBRARY_PATH
+      - WEBUI_PORT=7860
+      - WEBUI_HOST=0.0.0.0
+      - WEBUI_VERSION=stable
+    command: >
+      bash -c "
+      echo 'Starting Memory-Optimized Stable Diffusion with ROCm';
+
+      export PIP_CACHE_DIR=/root/.cache/pip;
+
+      echo 'Installing PyTorch ROCm for AMD RX 6800M...';
+      pip uninstall -y torch torchvision torchaudio || true;
+      pip install torch==2.5.1+rocm6.2 torchvision==0.20.1+rocm6.2 torchaudio==2.5.1+rocm6.2 --index-url https://download.pytorch.org/whl/rocm6.2;
+
+      pip install 'numpy<2.0' || echo 'NumPy install failed';
+
+      echo 'PyTorch Status:';
+      python3 -c 'import torch; print(f\"PyTorch: {torch.__version__}\"); print(f\"CUDA available: {torch.cuda.is_available()}\"); print(f\"Device count: {torch.cuda.device_count()}\")' || echo 'PyTorch check failed';
+
+      echo 'Checking AnimateDiff extension...';
+      if [ ! -d '/opt/stable-diffusion-webui/extensions/sd-webui-animatediff' ]; then
+        echo 'Installing AnimateDiff extension...';
+        cd /opt/stable-diffusion-webui/extensions && git clone https://github.com/continue-revolution/sd-webui-animatediff.git;
+      fi;
+
+      echo 'Starting WebUI with ROCm optimization...';
+      cd /opt/stable-diffusion-webui && python3 launch.py --listen --port 7860 --api --skip-torch-cuda-test --precision full --no-half --lowvram --medvram-sdxl --opt-sdp-attention --always-batch-cond-uncond --enable-insecure-extension-access;
+      "
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri/card1:/dev/dri/card0
+      - /dev/dri/renderD128:/dev/dri/renderD128
+    security_opt:
+      - seccomp:unconfined
+    group_add:
+      - video
+    ipc: host
+    cap_add:
+      - SYS_PTRACE
+    shm_size: "16gb"
+    deploy:
+      resources:
+        limits:
+          memory: 32G
+        reservations:
+          memory: 8G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860/"]
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 300s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.stable-diffusion.rule=Host(`${STABLE_DIFFUSION_HOST}`)"
+      - "traefik.http.routers.stable-diffusion.entrypoints=web"
+      - "traefik.http.routers.stable-diffusion.service=stable-diffusion"
+      - "traefik.http.services.stable-diffusion.loadbalancer.server.port=7860"
+
+  stable-video-diffusion:
+    image: ghcr.io/ai-dock/comfyui:latest-rocm
+    container_name: n8n-stable-video-diffusion
+    restart: unless-stopped
+    profiles:
+      - anim
+    networks:
+      - n8n-network
+    ports:
+      - "8188:8188"
+    volumes:
+      - ./svd-data:/data
+      - ./svd-models:/opt/ComfyUI/models
+      - ./svd-outputs:/opt/ComfyUI/output
+      - ./caches/svd-pip:/root/.cache/pip:rw
+      - ./caches/svd-huggingface:/root/.cache/huggingface:rw
+    environment:
+      - HSA_OVERRIDE_GFX_VERSION=10.3.0
+      - HIP_VISIBLE_DEVICES=0
+      - ROCR_VISIBLE_DEVICES=0
+      - HSA_ENABLE_SDMA=0
+      - PYTORCH_HIP_ALLOC_CONF=expandable_segments:True,garbage_collection_threshold:0.6
+      - HIP_MEMORY_POOL_TRIM_ENABLE=1
+      - ROCM_PATH=/opt/rocm
+      - PATH=/opt/rocm/bin:/usr/bin:$PATH
+      - LD_LIBRARY_PATH=/opt/rocm/lib:/usr/lib64:$LD_LIBRARY_PATH
+      - COMFYUI_PORT=8188
+      - COMFYUI_HOST=0.0.0.0
+      - WORKSPACE=/opt/ComfyUI
+    command: |
+      bash -c '
+      echo "Starting Stable Video Diffusion with ROCm on RX 6800M"
+
+      export PIP_CACHE_DIR=/root/.cache/pip
+
+      if python3 -c "import torch; exit(0 if \"rocm\" in torch.__version__ and torch.cuda.is_available() else 1)" 2>/dev/null; then
+        echo "✅ Working ROCm PyTorch already installed"
+        python3 -c "import torch; print(f\"PyTorch: {torch.__version__}\"); print(f\"GPU available: {torch.cuda.is_available()}\")"
+      else
+        echo "Installing ROCm PyTorch..."
+        pip uninstall -y torch torchvision torchaudio || true
+        pip install torch==2.5.1+rocm6.2 torchvision==0.20.1+rocm6.2 torchaudio==2.5.1+rocm6.2 --index-url https://download.pytorch.org/whl/rocm6.2
+        pip install pytorch-triton-rocm==2.1.0 || echo "Triton install failed, continuing..."
+      fi
+
+      echo "Installing additional dependencies..."
+      pip install scipy psutil einops transformers diffusers accelerate safetensors torchsde
+
+      echo "Verifying PyTorch installation..."
+      python3 -c "import torch; print(f\"PyTorch: {torch.__version__}\"); print(f\"GPU available: {torch.cuda.is_available()}\"); print(f\"Device count: {torch.cuda.device_count()}\")"
+
+      mkdir -p /opt/ComfyUI/models/checkpoints /opt/ComfyUI/models/vae /opt/ComfyUI/models/unet
+
+      echo "Checking for SVD models..."
+      SVD_XT_MODEL="/opt/ComfyUI/models/checkpoints/svd_xt.safetensors"
+
+      if [ -f "$SVD_XT_MODEL" ]; then
+        model_size=$(stat -c%s "$SVD_XT_MODEL" 2>/dev/null || echo 0)
+        if [ "$model_size" -gt 9000000000 ]; then
+          echo "✅ SVD model already present ($(du -h \"$SVD_XT_MODEL\" | cut -f1))"
+        else
+          echo "Model incomplete, will re-download"
+          rm -f "$SVD_XT_MODEL"
+        fi
+      fi
+
+      if [ ! -f "$SVD_XT_MODEL" ]; then
+        echo "Downloading SVD-XT model (~9.5GB)..."
+        cd /opt/ComfyUI/models/checkpoints
+        wget -c -O svd_xt.safetensors.tmp "https://huggingface.co/stabilityai/stable-video-diffusion-img2vid-xt/resolve/main/svd_xt.safetensors"
+
+        if [ $? -eq 0 ] && [ -f "svd_xt.safetensors.tmp" ]; then
+          tmp_size=$(stat -c%s "svd_xt.safetensors.tmp" 2>/dev/null || echo 0)
+          if [ "$tmp_size" -gt 9000000000 ]; then
+            mv svd_xt.safetensors.tmp svd_xt.safetensors
+            echo "✅ SVD model downloaded successfully"
+          else
+            rm -f svd_xt.safetensors.tmp
+            echo "❌ Download incomplete"
+          fi
+        fi
+      fi
+
+      echo "Starting ComfyUI..."
+      cd /opt/ComfyUI && python3 main.py --listen 0.0.0.0 --port 8188 --cpu-vae --lowvram
+      '
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri/card1:/dev/dri/card0
+      - /dev/dri/renderD128:/dev/dri/renderD128
+    security_opt:
+      - seccomp:unconfined
+    group_add:
+      - video
+    ipc: host
+    cap_add:
+      - SYS_PTRACE
+    shm_size: "8gb"
+    deploy:
+      resources:
+        limits:
+          memory: 24G
+          cpus: "6.0"
+        reservations:
+          memory: 8G
+          cpus: "2.0"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8188/"]
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 300s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.svd.rule=Host(`${SVD_HOST}`)"
+      - "traefik.http.routers.svd.entrypoints=web"
+      - "traefik.http.routers.svd.service=svd"
+      - "traefik.http.services.svd.loadbalancer.server.port=8188"
+
+  wan21-video:
+    image: ghcr.io/ai-dock/comfyui:latest-rocm
+    container_name: n8n-wan21-video
+    restart: unless-stopped
+    profiles:
+      - anim
+    networks:
+      - n8n-network
+    environment:
+      - HSA_OVERRIDE_GFX_VERSION=10.3.0
+      - HIP_VISIBLE_DEVICES=0
+      - ROCR_VISIBLE_DEVICES=0
+      - HSA_ENABLE_SDMA=0
+      - PYTORCH_HIP_ALLOC_CONF=expandable_segments:True,garbage_collection_threshold:0.6
+      - HIP_MEMORY_POOL_TRIM_ENABLE=1
+      - ROCM_PATH=/opt/rocm
+      - PATH=/opt/rocm/bin:/usr/bin:$PATH
+      - LD_LIBRARY_PATH=/opt/rocm/lib:/usr/lib64:$LD_LIBRARY_PATH
+      - COMFYUI_PORT=8189
+      - COMFYUI_HOST=0.0.0.0
+      - WORKSPACE=/opt/ComfyUI
+      - CUDA_VISIBLE_DEVICES=""
+      - HIP_FORCE_DEV_KERNARG=1
+      - TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1
+      - PYTORCH_TUNABLEOP_ENABLED=1
+    volumes:
+      - ./wan21-data:/data:rw
+      - ./wan21-models:/opt/ComfyUI/models:rw
+      - ./wan21-outputs:/opt/ComfyUI/output:rw
+      - ./wan21-custom-nodes:/opt/ComfyUI/custom_nodes:rw
+      - ./caches/wan21-pip:/root/.cache/pip:rw
+      - ./caches/wan21-huggingface:/root/.cache/huggingface:rw
+      - ./caches/wan21-torch:/root/.cache/torch:rw
+      - ./caches/wan21-conda:/opt/conda/pkgs:rw
+    ports:
+      - "8189:8189"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.wan21-video.rule=Host(`${WAN21_HOST}`)"
+      - "traefik.http.routers.wan21-video.entrypoints=web"
+      - "traefik.http.routers.wan21-video.service=wan21-video"
+      - "traefik.http.services.wan21-video.loadbalancer.server.port=8189"
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri/card1:/dev/dri/card0
+      - /dev/dri/renderD128:/dev/dri/renderD128
+    security_opt:
+      - seccomp:unconfined
+    group_add:
+      - video
+    ipc: host
+    cap_add:
+      - SYS_PTRACE
+    command: |
+      bash -c '
+      echo "🔧 Starting Wan2.1 Video Generation with ROCm on RX 6800M"
+
+      export PIP_CACHE_DIR=/root/.cache/pip
+
+      echo "Installing ComfyUI base dependencies..."
+      pip install torch torchvision torchaudio torchsde numpy einops transformers tokenizers sentencepiece safetensors aiohttp yarl pyyaml Pillow scipy tqdm psutil || echo "Base dependency installation failed, continuing..."
+
+      echo "Installing additional video dependencies..."
+      pip install accelerate diffusers kornia spandrel soundfile av pydantic pydantic-settings || echo "Additional dependencies failed, continuing..."
+
+      echo "Installing OpenCV + ControlNet dependencies..."
+      pip install opencv-python opencv-contrib-python matplotlib seaborn plotly scikit-image || echo "OpenCV + plotting dependencies failed, continuing..."
+
+      echo "Installing PyTorch ROCm (if needed)..."
+      python3 -c "import torch; print(f\"Current PyTorch: {torch.__version__}\")" || echo "PyTorch check failed"
+
+      if ! python3 -c "import torch; exit(0 if \"rocm\" in torch.__version__ else 1)" 2>/dev/null; then
+        echo "Installing correct PyTorch with ROCm support..."
+        pip uninstall -y torch torchvision torchaudio
+        pip install --force-reinstall torch==2.5.1+rocm6.2 torchvision==0.20.1+rocm6.2 torchaudio==2.5.1+rocm6.2 --index-url https://download.pytorch.org/whl/rocm6.2
+      else
+        echo "PyTorch ROCm already installed"
+      fi
+
+      echo "Setting up Wan2.1 models directory structure..."
+      mkdir -p /opt/ComfyUI/models/checkpoints
+      mkdir -p /opt/ComfyUI/models/diffusion_models
+      mkdir -p /opt/ComfyUI/models/vae
+      mkdir -p /opt/ComfyUI/models/text_encoders
+      mkdir -p /opt/ComfyUI/models/clip_vision
+      mkdir -p /opt/ComfyUI/models/unet
+      mkdir -p /opt/ComfyUI/custom_nodes
+
+      echo "Testing GPU detection..."
+      python3 -c "import torch; print(f\"CUDA available: {torch.cuda.is_available()}\"); print(f\"Device count: {torch.cuda.device_count()}\");" || echo "GPU detection failed"
+
+      echo "Testing ROCm installation..."
+      python3 -c "import torch; print(f\"ROCm available: {torch.version.hip is not None}\")" || echo "ROCm test failed"
+
+      echo "Starting ComfyUI for Wan2.1 Video Generation..."
+      cd /opt/ComfyUI && python3 main.py --listen 0.0.0.0 --port 8189 --cpu-vae --lowvram --use-pytorch-cross-attention
+      '
+    shm_size: "8gb"
+    deploy:
+      resources:
+        limits:
+          memory: 20G
+          cpus: "8.0"
+        reservations:
+          memory: 8G
+          cpus: "4.0"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8189/"]
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 300s
+
+  cogvideo:
+    image: rocm/pytorch:latest
+    # image: ghcr.io/ai-dock/comfyui:latest-rocm
+    # image: rocm/pytorch:rocm6.0_ubuntu22.04_py3.10_pytorch_2.1.1  # More stable
+    container_name: n8n-cogvideo
+    restart: unless-stopped
+    profiles:
+      - anim
+    networks:
+      - n8n-network
+    environment:
+      - HSA_OVERRIDE_GFX_VERSION=10.3.1
+      - HIP_VISIBLE_DEVICES=""
+      - ROCR_VISIBLE_DEVICES=""
+      - CUDA_VISIBLE_DEVICES=""
+      - HSA_ENABLE_SDMA=0
+      # Memory management - simplified for older PyTorch versions
+      # - PYTORCH_HIP_ALLOC_CONF=expandable_segments:True,garbage_collection_threshold:0.6
+      # Backup memory strategies
+      # - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+      # 💡 If ROCm memory errors persist, try adding: ROCM_DISABLE_HIPBLASLT=1
+      - HIP_MEMORY_POOL_TRIM_ENABLE=1
+      - ROCM_PATH=/opt/rocm
+      - PATH=/opt/rocm/bin:/usr/bin:$PATH
+      - LD_LIBRARY_PATH=/opt/rocm/lib:/usr/lib64:$LD_LIBRARY_PATH
+      - COMFYUI_PORT=8190
+      - COMFYUI_HOST=0.0.0.0
+      - WORKSPACE=/opt/ComfyUI
+      - HIP_FORCE_DEV_KERNARG=1
+      - TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1
+      - PYTORCH_TUNABLEOP_ENABLED=1
+      # Additional ROCm optimizations
+      - ROCBLAS_LAYER=1
+      - HIPBLASLT_LOG_LEVEL=0
+      - HIPBLASLT_TENSILE_LIBPATH=/opt/rocm/lib/hipblaslt/library/
+      - PYTORCH_ROCM_ARCH=gfx1031
+      - ROCM_DISABLE_HIPBLASLT=1
+      # Add these debug flags to your docker-compose
+      - AMD_SERIALIZE_KERNEL=3  # Better HIP error reporting
+      - TORCH_USE_HIP_DSA=1     # Device-side assertions
+      - HSA_ENABLE_INTERRUPT=0  # Disable interrupts that can cause issues
+      # Force specific GPU architecture
+      - HSA_FORCE_DEVICE_CONFIG=gfx1031
+      # Disable GPU entirely for ComfyUI
+      - COMFYUI_DISABLE_CUDA=1
+      - PYTORCH_DISABLE_CUDA=1
+    volumes:
+      - ./cogvideo-data:/data:rw
+      - ./cogvideo-models:/opt/ComfyUI/models:rw
+      - ./cogvideo-outputs:/opt/ComfyUI/output:rw
+      - ./cogvideo-custom-nodes:/opt/ComfyUI/custom_nodes:rw
+      - ./caches/cogvideo-pip:/app/cache/pip:rw
+      - ./caches/cogvideo-huggingface:/app/cache/huggingface:rw
+      - ./caches/cogvideo-torch:/app/cache/torch:rw
+      # 🔧 UPDATE: Use the new fixed startup script (v38)
+      - ./startup-cache-v41.sh:/startup-cache.sh:ro
+      - ./comfyui-install:/opt/ComfyUI-core:ro
+    ports:
+      - "8190:8190"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.cogvideo.rule=Host(`${COGVIDEO_HOST}`)"
+      - "traefik.http.routers.cogvideo.entrypoints=web"
+      - "traefik.http.routers.cogvideo.service=cogvideo"
+      - "traefik.http.services.cogvideo.loadbalancer.server.port=8190"
+    devices:
+      # 🔧 CORRECTED: Use card1 as specified by user
+      - /dev/kfd:/dev/kfd
+      - /dev/dri/card1:/dev/dri/card0
+      - /dev/dri/renderD128:/dev/dri/renderD128
+    security_opt:
+      - seccomp:unconfined
+    group_add:
+      - video
+    ipc: host
+    cap_add:
+      - SYS_PTRACE
+    command: bash /startup-cache.sh
+    shm_size: "8gb"
+    deploy:
+      resources:
+        limits:
+          memory: 18G
+          cpus: "8.0"
+        reservations:
+          memory: 6G
+          cpus: "4.0"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8190/"]
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 300s

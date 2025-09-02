@@ -80,7 +80,7 @@ graph TB
 - **🔒 Security First** - Cloudflare tunnels, non-root containers, encrypted data
 - **🚀 Production Ready** - Health checks, backups, and graceful shutdowns
 - **📦 Easy Deployment** - Single Docker Compose command
-- **🎯 GPU Support** - ROCm optimization for AMD graphics cards
+- **🖥️ CPU Processing** - All AI services run on CPU (GPU support planned for future versions)
 - **🔧 Highly Configurable** - Environment-based configuration
 
 ## 🚀 Quick Start Guide
@@ -92,15 +92,15 @@ graph TB
   - 16GB RAM minimum (32GB+ recommended for AI services)
   - 100GB+ free disk space
   - Linux host (tested on Ubuntu/Fedora)
-- **Optional:** AMD RX 6000+ series or NVIDIA GPU for AI acceleration
+- **Note:** Current version runs on CPU only (GPU acceleration coming in future versions)
 - **Cloudflare Account** - For secure tunneling (recommended)
 
 ### Step 1: Repository Setup
 
 ```bash
 # Clone the repository
-git clone <your-repo-url>
-cd ai-automata
+git clone https://github.com/askb/ai-n8domata.git
+cd ai-n8domata
 
 # Initialize submodules for AI services
 git submodule update --init --recursive
@@ -199,7 +199,7 @@ The platform uses Docker Compose profiles to manage different service groups eff
 - Stable Video Diffusion via ComfyUI
 - WAN2.1 Video Generation
 - CogVideo (experimental video AI)
-- ROCm-optimized for AMD GPUs
+- CPU-optimized processing
 
 **Resource Usage:** +16GB RAM, GPU required
 
@@ -281,10 +281,9 @@ LOG_LEVEL=debug                   # Logging verbosity
 
 **🎨 Stable Diffusion:**
 ```bash
-# ROCm GPU optimization (AMD)
-HSA_OVERRIDE_GFX_VERSION=10.3.0   # GPU compatibility
-PYTORCH_HIP_ALLOC_CONF=expandable_segments:True
+# CPU processing configuration
 WEBUI_PORT=7860                   # Web interface port
+CPU_THREADS=4                     # CPU thread utilization
 ```
 
 ## 📊 Monitoring and Observability
@@ -438,14 +437,11 @@ REDIS_MAXMEMORY=2gb
 REDIS_MAXMEMORY_POLICY=allkeys-lru
 ```
 
-**GPU Acceleration:**
+**CPU Processing:**
 ```bash
-# Ensure proper GPU drivers
-# AMD: ROCm 5.4+ 
-# NVIDIA: Container toolkit
-
-# Verify GPU access
-docker run --rm --device=/dev/kfd --device=/dev/dri rocm/pytorch:latest rocminfo
+# Verify CPU resources
+nproc  # Check available CPU cores
+free -h  # Check available memory
 ```
 
 ## 🔍 Troubleshooting Guide
@@ -494,16 +490,16 @@ docker compose exec redis redis-cli LLEN bull:jobs:wait
 
 **❌ AI services failing:**
 ```bash
-# GPU access verification
-docker run --rm --device=/dev/kfd --device=/dev/dri rocm/pytorch:latest rocminfo
-
-# Check device permissions
-ls -la /dev/dri/
-groups $USER
+# Check CPU and memory resources
+nproc
+free -h
 
 # Memory issues
 dmesg | grep -i "killed process"
 docker stats
+
+# Check CPU usage
+top -p $(docker inspect --format='{{.State.Pid}}' container-name)
 ```
 
 **❌ Cloudflare tunnel issues:**
