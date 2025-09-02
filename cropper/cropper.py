@@ -1,7 +1,5 @@
-import json
 import logging
 import os
-import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import unquote, urlparse
@@ -11,7 +9,7 @@ import mediapipe as mp
 import numpy as np
 import requests
 import uvicorn
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 # Configure logging
@@ -127,7 +125,7 @@ class VideoCropper:
                     with open(temp_path, "rb") as f:
                         header = f.read(12)
                         logger.error(f"File header: {header}")
-                except:
+                except Exception:
                     pass
                 raise ValueError("OpenCV cannot open the downloaded video file")
 
@@ -149,7 +147,7 @@ class VideoCropper:
             if "temp_path" in locals() and os.path.exists(temp_path):
                 try:
                     os.remove(temp_path)
-                except:
+                except Exception:
                     pass
             raise ValueError(f"Could not download video from {url}: {str(e)}")
 
@@ -352,7 +350,7 @@ class VideoCropper:
             try:
                 os.remove(resolved_path)
                 logger.info(f"Cleaned up temporary file: {resolved_path}")
-            except:
+            except Exception:
                 pass
 
         # Apply smoothing
@@ -465,7 +463,7 @@ async def crop_video(request: CropRequest):
 
         return CropResponse(
             success=True,
-            message=f"Crop analysis complete. Use the FFmpeg command to process the video.",
+            message="Crop analysis complete. Use the FFmpeg command to process the video.",
             crop_regions=result["crop_regions"],
             ffmpeg_command=ffmpeg_cmd,
         )

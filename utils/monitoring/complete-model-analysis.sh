@@ -4,8 +4,10 @@
 
 set -e
 
+# shellcheck disable=SC2034
 RED='\033[0;31m'
 GREEN='\033[0;32m'
+# shellcheck disable=SC2034
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 PURPLE='\033[0;35m'
@@ -26,6 +28,7 @@ print_status() {
 }
 
 run_complete_analysis() {
+    # shellcheck disable=SC2155
     local report_file="complete-model-analysis-$(date +%Y%m%d-%H%M%S).txt"
 
     print_status "Running complete model analysis..."
@@ -76,6 +79,7 @@ EOF
 EOF
 
         # Look for successful model loading across all containers
+        # shellcheck disable=SC2162
         docker ps -a --format "{{.Names}}" | while read container; do
             if docker logs "$container" --tail 500 2>/dev/null | grep -i "load.*model\|model.*load" | grep -v "fail\|error" | head -3 | grep -q .; then
                 echo "✅ Container $container showed successful model loading:"
@@ -93,6 +97,7 @@ EOF
 EOF
 
         # Look for model failures
+        # shellcheck disable=SC2162
         docker ps -a --format "{{.Names}}" | while read container; do
             if docker logs "$container" --tail 500 2>/dev/null | grep -i "out of memory\|fail.*load\|cannot load" | head -3 | grep -q .; then
                 echo "❌ Container $container showed model failures:"
@@ -118,12 +123,18 @@ EOF
     if [ -d "wan21-models" ]; then
         echo -e "\n${CYAN}WAN21 Models breakdown:${NC}"
 
+        # shellcheck disable=SC2034
         local total_size=0
+        # shellcheck disable=SC2034
         local model_count=0
 
+        # shellcheck disable=SC2162
         find wan21-models -name "*.safetensors" -type f | while read model_file; do
+            # shellcheck disable=SC2155
             local size_bytes=$(stat -c%s "$model_file" 2>/dev/null || echo "0")
+            # shellcheck disable=SC2155
             local size_gb=$(echo "scale=1; $size_bytes/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
+            # shellcheck disable=SC2155
             local basename_file=$(basename "$model_file")
 
             # Categorize model
@@ -155,6 +166,7 @@ EOF
     if [ -d "cogvideo-models" ]; then
         echo -e "\n${CYAN}CogVideo Models breakdown:${NC}"
 
+        # shellcheck disable=SC2162
         find cogvideo-models -name "*.safetensors" -type f | head -10 | while read model_file; do
             local size_bytes=$(stat -c%s "$model_file" 2>/dev/null || echo "0")
             local size_gb=$(echo "scale=1; $size_bytes/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
@@ -192,6 +204,7 @@ EOF
 #### SAFE TO REMOVE (High confidence):
 EOF
 
+        # shellcheck disable=SC2162
         find wan21-models -name "*.safetensors" -type f | while read model_file; do
             local size_bytes=$(stat -c%s "$model_file" 2>/dev/null || echo "0")
             local size_gb=$(echo "scale=1; $size_bytes/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
@@ -210,6 +223,7 @@ EOF
 #### RECOMMENDED TO KEEP:
 EOF
 
+        # shellcheck disable=SC2162
         find wan21-models -name "*.safetensors" -type f | while read model_file; do
             local size_bytes=$(stat -c%s "$model_file" 2>/dev/null || echo "0")
             local size_gb=$(echo "scale=1; $size_bytes/1024/1024/1024" | bc -l 2>/dev/null || echo "0")

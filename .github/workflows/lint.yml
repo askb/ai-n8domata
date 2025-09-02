@@ -55,8 +55,9 @@ jobs:
       with:
         dockerfile: |
           Dockerfile
-          Dockerfile.queue-metrics
-          dynamic-scaler/Dockerfile
+          queue-metrics/Dockerfile.queue-metrics
+          dynamic-scaler/Dockerfile.dynamic-scaler
+          cropper/Dockerfile
         failure-threshold: warning
 
   yaml-lint:
