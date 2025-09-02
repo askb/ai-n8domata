@@ -63,7 +63,33 @@ repos:
     hooks:
       - id: shellcheck
         files: ^utils/backup/.*\.sh$
-        args: ['-e', 'SC1091', '-e', 'SC2086', '-e', 'SC2012', '-e', 'SC2181', '-e', 'SC1009', '-e', 'SC1078', '-e', 'SC1079', '-e', 'SC1073', '-e', 'SC1072', '-e', 'SC1090', '-e', 'SC2046', '-e', 'SC2129', '-e', 'SC1036']
+        args:
+          - '-e'
+          - 'SC1091'
+          - '-e'
+          - 'SC2086'
+          - '-e'
+          - 'SC2012'
+          - '-e'
+          - 'SC2181'
+          - '-e'
+          - 'SC1009'
+          - '-e'
+          - 'SC1078'
+          - '-e'
+          - 'SC1079'
+          - '-e'
+          - 'SC1073'
+          - '-e'
+          - 'SC1072'
+          - '-e'
+          - 'SC1090'
+          - '-e'
+          - 'SC2046'
+          - '-e'
+          - 'SC2129'
+          - '-e'
+          - 'SC1036'
 
   # Markdown formatting
   - repo: https://github.com/igorshubovych/markdownlint-cli
