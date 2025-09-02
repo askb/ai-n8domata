@@ -17,13 +17,13 @@ jobs:
             context: .
           - name: queue-metrics
             dockerfile: Dockerfile.queue-metrics
-            context: .
+            context: queue-metrics
           - name: dynamic-scaler
-            dockerfile: dynamic-scaler/Dockerfile
+            dockerfile: Dockerfile.dynamic-scaler
             context: dynamic-scaler
           - name: intelligent-cropper
             dockerfile: Dockerfile
-            context: .
+            context: cropper
 
     steps:
     - uses: actions/checkout@v4
