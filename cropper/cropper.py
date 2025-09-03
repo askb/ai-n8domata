@@ -57,8 +57,7 @@ class VideoCropper:
             # Get filename from URL and decode it properly
             parsed_url = urlparse(url)
             filename = (
-                unquote(os.path.basename(parsed_url.path))
-                or "downloaded_video.mp4"
+                unquote(os.path.basename(parsed_url.path)) or "downloaded_video.mp4"
             )
 
             # Clean filename - remove problematic characters
@@ -78,9 +77,7 @@ class VideoCropper:
 
             # Check if we got a valid response
             if response.status_code != 200:
-                raise ValueError(
-                    f"HTTP {response.status_code} error downloading video"
-                )
+                raise ValueError(f"HTTP {response.status_code} error downloading video")
 
             # Check content type
             content_type = response.headers.get("content-type", "")
@@ -116,8 +113,7 @@ class VideoCropper:
                 raise ValueError("Downloaded file is empty")
 
             logger.info(
-                f"Video downloaded successfully: {temp_path} "
-                f"({file_size} bytes)"
+                f"Video downloaded successfully: {temp_path} " f"({file_size} bytes)"
             )
 
             # Quick test that OpenCV can open the file
@@ -131,9 +127,7 @@ class VideoCropper:
                         logger.error(f"File header: {header}")
                 except Exception:
                     pass
-                raise ValueError(
-                    "OpenCV cannot open the downloaded video file"
-                )
+                raise ValueError("OpenCV cannot open the downloaded video file")
 
             # Get basic video info
             frame_count = int(test_cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -289,12 +283,8 @@ class VideoCropper:
             # Average the coordinates
             avg_x = sum(r["x"] for r in window_regions) // len(window_regions)
             avg_y = sum(r["y"] for r in window_regions) // len(window_regions)
-            avg_w = (
-                sum(r["width"] for r in window_regions) // len(window_regions)
-            )
-            avg_h = (
-                sum(r["height"] for r in window_regions) // len(window_regions)
-            )
+            avg_w = sum(r["width"] for r in window_regions) // len(window_regions)
+            avg_h = sum(r["height"] for r in window_regions) // len(window_regions)
 
             smoothed.append(
                 {
@@ -429,9 +419,7 @@ async def analyze_video(request: CropRequest):
 
         return CropResponse(
             success=True,
-            message=(
-                f"Analysis complete: {result['total_frames']} frames processed"
-            ),
+            message=(f"Analysis complete: {result['total_frames']} frames processed"),
             crop_regions=result["crop_regions"],
         )
 
@@ -454,8 +442,7 @@ async def crop_video(request: CropRequest):
             if video_path.startswith("http"):
                 parsed_url = urlparse(video_path)
                 base_name = (
-                    os.path.splitext(os.path.basename(parsed_url.path))[0]
-                    or "video"
+                    os.path.splitext(os.path.basename(parsed_url.path))[0] or "video"
                 )
             else:
                 base_name = Path(video_path).stem
