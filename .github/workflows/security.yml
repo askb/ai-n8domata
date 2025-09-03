@@ -57,7 +57,7 @@ jobs:
     - name: Build test images
       run: |
         docker build -t test-n8n:latest -f Dockerfile .
-        docker build -t test-queue-metrics:latest -f Dockerfile.queue-metrics .
+        docker build -t test-queue-metrics:latest -f queue-metrics/Dockerfile.queue-metrics queue-metrics/
 
     - name: Run Trivy vulnerability scanner on N8N image
       uses: aquasecurity/trivy-action@master

@@ -49,9 +49,8 @@ COPY --from=builder /root/.docker/cli-plugins/docker-compose /usr/local/bin/dock
 # Copy application code
 COPY dynamic-scaler/ .
 
-# Copy docker-compose.yml and .env for scaling operations
+# Copy docker-compose.yml for scaling operations (but NOT .env for security)
 COPY docker-compose.yml .
-COPY .env .
 
 # Set ownership and permissions
 RUN chown -R scaler:scaler /app && \

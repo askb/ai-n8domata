@@ -19,8 +19,8 @@ jobs:
             dockerfile: Dockerfile.queue-metrics
             context: queue-metrics
           - name: dynamic-scaler
-            dockerfile: Dockerfile.dynamic-scaler
-            context: dynamic-scaler
+            dockerfile: dynamic-scaler/Dockerfile.dynamic-scaler
+            context: .
           - name: intelligent-cropper
             dockerfile: Dockerfile
             context: cropper
