@@ -1,4 +1,3 @@
-
 #!/bin/bash
 # migrate-to-persistent.sh
 # Migration script to convert existing setup to persistent storage
