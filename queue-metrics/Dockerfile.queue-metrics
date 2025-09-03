@@ -1,5 +1,5 @@
 # Multi-stage build for efficient Python container
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
 # Install system dependencies for building Python packages
 RUN apt-get update && \
@@ -11,7 +11,7 @@ RUN apt-get update && \
 WORKDIR /app
 
 # Copy requirements first for better layer caching
-COPY requirements.txt .
+COPY queue-metrics/requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir --user -r requirements.txt
@@ -29,7 +29,7 @@ WORKDIR /app
 COPY --from=builder /root/.local /home/queuemetrics/.local
 
 # Copy application code
-COPY . .
+COPY queue-metrics/ .
 
 # Set ownership and permissions
 RUN chown -R queuemetrics:queuemetrics /app
