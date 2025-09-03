@@ -123,7 +123,7 @@ echo "🎯 IMMEDIATE PERFORMANCE FIXES:"
 echo "==============================="
 echo ""
 
-read -p "Try these fixes? (y/N): " try_fixes
+read -r -p "Try these fixes? (y/N): " try_fixes
 
 if [[ $try_fixes =~ ^[Yy]$ ]]; then
     echo ""

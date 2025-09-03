@@ -167,10 +167,13 @@ EOF
         echo -e "\n${CYAN}CogVideo Models breakdown:${NC}"
 
         # shellcheck disable=SC2162
-        find cogvideo-models -name "*.safetensors" -type f | head -10 | while read model_file; do
-            local size_bytes=$(stat -c%s "$model_file" 2>/dev/null || echo "0")
-            local size_gb=$(echo "scale=1; $size_bytes/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
-            local basename_file=$(basename "$model_file")
+        find cogvideo-models -name "*.safetensors" -type f | head -10 | while IFS= read -r model_file; do
+            local size_bytes
+            size_bytes=$(stat -c%s "$model_file" 2>/dev/null || echo "0")
+            local size_gb
+            size_gb=$(echo "scale=1; $size_bytes/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
+            local basename_file
+            basename_file=$(basename "$model_file")
 
             if (( $(echo "$size_gb > 8" | bc -l) )); then
                 echo "  🔴 $basename_file (${size_gb}GB) - Likely too large"
@@ -204,11 +207,13 @@ EOF
 #### SAFE TO REMOVE (High confidence):
 EOF
 
-        # shellcheck disable=SC2162
-        find wan21-models -name "*.safetensors" -type f | while read model_file; do
-            local size_bytes=$(stat -c%s "$model_file" 2>/dev/null || echo "0")
-            local size_gb=$(echo "scale=1; $size_bytes/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
-            local basename_file=$(basename "$model_file")
+        find wan21-models -name "*.safetensors" -type f | while IFS= read -r model_file; do
+            local size_bytes
+            size_bytes=$(stat -c%s "$model_file" 2>/dev/null || echo "0")
+            local size_gb
+            size_gb=$(echo "scale=1; $size_bytes/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
+            local basename_file
+            basename_file=$(basename "$model_file")
 
             # High confidence removal criteria
             if (( $(echo "$size_gb > 10" | bc -l) )) || [[ "$basename_file" == *"bf16"* ]]; then
@@ -223,11 +228,13 @@ EOF
 #### RECOMMENDED TO KEEP:
 EOF
 
-        # shellcheck disable=SC2162
-        find wan21-models -name "*.safetensors" -type f | while read model_file; do
-            local size_bytes=$(stat -c%s "$model_file" 2>/dev/null || echo "0")
-            local size_gb=$(echo "scale=1; $size_bytes/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
-            local basename_file=$(basename "$model_file")
+        find wan21-models -name "*.safetensors" -type f | while IFS= read -r model_file; do
+            local size_bytes
+            size_bytes=$(stat -c%s "$model_file" 2>/dev/null || echo "0")
+            local size_gb
+            size_gb=$(echo "scale=1; $size_bytes/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
+            local basename_file
+            basename_file=$(basename "$model_file")
 
             # High confidence keep criteria
             if [[ "$basename_file" == *"fp8"* ]] && (( $(echo "$size_gb < 8" | bc -l) )); then
