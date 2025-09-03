@@ -120,7 +120,7 @@ echo "Option D: Manual cleanup - pick specific execution IDs"
 echo "Option E: No further cleanup"
 echo ""
 
-read -p "Choose option (A/B/C/D/E): " surgical_choice
+read -r -p "Choose option (A/B/C/D/E): " surgical_choice
 
 case $surgical_choice in
     A|a)

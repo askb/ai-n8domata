@@ -13,7 +13,8 @@ from redis_client import RedisClient
 
 # Configure simple logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
 # Configure structured logging
@@ -96,7 +97,7 @@ class DynamicScaler:
             "Dynamic Scaler started successfully",
             service=self.config.docker.service_name,
             project=self.config.docker.project_name,
-            queue=f"{self.config.queue.name_prefix}:{self.config.queue.name}",
+            queue=(f"{self.config.queue.name_prefix}:{self.config.queue.name}"),
             min_replicas=self.config.scaling.min_replicas,
             max_replicas=self.config.scaling.max_replicas,
             scale_up_threshold=self.config.scaling.scale_up_threshold,
@@ -195,8 +196,8 @@ class DynamicScaler:
                 current_replicas + 1, self.config.scaling.max_replicas
             )
             reason = (
-                f"Queue length {queue_length} > "
-                f"threshold {self.config.scaling.scale_up_threshold}"
+                f"Queue length {queue_length} > threshold "
+                f"{self.config.scaling.scale_up_threshold}"
             )
             return target_replicas, reason
 
@@ -209,8 +210,8 @@ class DynamicScaler:
                 current_replicas - 1, self.config.scaling.min_replicas
             )
             reason = (
-                f"Queue length {queue_length} <= "
-                f"threshold {self.config.scaling.scale_down_threshold}"
+                f"Queue length {queue_length} <= threshold "
+                f"{self.config.scaling.scale_down_threshold}"
             )
             return target_replicas, reason
 
@@ -221,7 +222,9 @@ class DynamicScaler:
     ) -> bool:
         """Execute scaling action."""
         logger.info(
-            "Scaling decision made", target_replicas=target_replicas, reason=reason
+            "Scaling decision made",
+            target_replicas=target_replicas,
+            reason=reason,
         )
 
         success = self.docker_manager.scale_service(target_replicas)

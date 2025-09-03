@@ -8,7 +8,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
+# PURPLE='\033[0;35m'  # Unused color
 CYAN='\033[0;36m'
 NC='\033[0m'
 
@@ -84,7 +84,7 @@ scan_wan21_models() {
     # Initialize counters
     local total_size=0
     local model_count=0
-    local duplicate_count=0
+    # local duplicate_count=0  # Unused variable
     local oversized_count=0
 
     echo -e "${BLUE}=== MODEL INVENTORY ===${NC}"
@@ -92,9 +92,12 @@ scan_wan21_models() {
     # Analyze .safetensors files
     while IFS= read -r -d '' file; do
         if [ -f "$file" ]; then
-            local size_bytes=$(stat -c%s "$file" 2>/dev/null || echo "0")
-            local size_gb=$(echo "scale=1; $size_bytes/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
-            local basename_file=$(basename "$file")
+            local size_bytes
+            size_bytes=$(stat -c%s "$file" 2>/dev/null || echo "0")
+            local size_gb
+            size_gb=$(echo "scale=1; $size_bytes/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
+            local basename_file
+            basename_file=$(basename "$file")
 
             model_count=$((model_count + 1))
             total_size=$((total_size + size_bytes))
@@ -152,7 +155,8 @@ scan_wan21_models() {
     done < <(find "$wan21_dir" -name "*.safetensors" -type f -print0 2>/dev/null)
 
     # Summary
-    local total_size_gb=$(echo "scale=1; $total_size/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
+    local total_size_gb
+    total_size_gb=$(echo "scale=1; $total_size/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
 
     echo -e "\n${CYAN}=== INVENTORY SUMMARY ===${NC}"
     echo "  Total models found: $model_count"
@@ -174,7 +178,8 @@ identify_duplicates_and_redundancies() {
 
     while IFS= read -r -d '' file; do
         if [ -f "$file" ]; then
-            local basename_file=$(basename "$file")
+            local basename_file
+            basename_file=$(basename "$file")
             local base_name=""
 
             # Extract base model name (remove precision suffixes)
@@ -191,28 +196,32 @@ identify_duplicates_and_redundancies() {
     # Analyze each model family
     for base_name in "${!model_families[@]}"; do
         local files_list="${model_families[$base_name]}"
-        local file_count=$(echo "$files_list" | tr '|' '\n' | wc -l)
+        local file_count
+        file_count=$(echo "$files_list" | tr '|' '\n' | wc -l)
 
         if [ "$file_count" -gt 1 ]; then
             echo -e "\n🔍 Model Family: ${base_name}"
             echo "   Multiple versions found ($file_count files):"
 
-            local total_family_size=0
-            local recommended_file=""
+            # local total_family_size=0  # Unused variable
+            # local recommended_file=""  # Unused variable
             local recommended_size=999999
 
-            echo "$files_list" | tr '|' '\n' | while read -r file; do
+            echo "$files_list" | tr '|' '\n' | while IFS= read -r file; do
                 if [ -f "$file" ]; then
-                    local size_bytes=$(stat -c%s "$file" 2>/dev/null || echo "0")
-                    local size_gb=$(echo "scale=1; $size_bytes/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
-                    local basename_file=$(basename "$file")
+                    local size_bytes
+                    size_bytes=$(stat -c%s "$file" 2>/dev/null || echo "0")
+                    local size_gb
+                    size_gb=$(echo "scale=1; $size_bytes/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
+                    local basename_file
+                    basename_file=$(basename "$file")
 
                     # Determine recommendation
                     local recommendation=""
                     if [[ "$basename_file" == *"fp8"* ]]; then
                         recommendation="🟢 BEST for AMD (smallest, optimized)"
                         if (( $(echo "$size_gb < $recommended_size" | bc -l) )); then
-                            recommended_file="$file"
+                            # recommended_file="$file"  # Unused variable
                             recommended_size="$size_gb"
                         fi
                     elif [[ "$basename_file" == *"fp16"* ]]; then
@@ -239,7 +248,8 @@ create_cleanup_recommendations() {
     print_status "Creating cleanup recommendations..."
     echo
 
-    local report_file="wan21-cleanup-recommendations-$(date +%Y%m%d-%H%M%S).txt"
+    local report_file
+    report_file="wan21-cleanup-recommendations-$(date +%Y%m%d-%H%M%S).txt"
 
     cat > "$report_file" << EOF
 # WAN21 Model Cleanup Recommendations for AMD RX 6800M
@@ -257,9 +267,12 @@ EOF
     # Find recommended models
     while IFS= read -r -d '' file; do
         if [ -f "$file" ]; then
-            local size_bytes=$(stat -c%s "$file" 2>/dev/null || echo "0")
-            local size_gb=$(echo "scale=1; $size_bytes/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
-            local basename_file=$(basename "$file")
+            local size_bytes
+            size_bytes=$(stat -c%s "$file" 2>/dev/null || echo "0")
+            local size_gb
+            size_gb=$(echo "scale=1; $size_bytes/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
+            local basename_file
+            basename_file=$(basename "$file")
 
             # Recommend based on size and format
             if (( $(echo "$size_gb < 6" | bc -l) )) && [[ "$basename_file" == *"fp8"* ]]; then
@@ -283,9 +296,12 @@ EOF
 
     while IFS= read -r -d '' file; do
         if [ -f "$file" ]; then
-            local size_bytes=$(stat -c%s "$file" 2>/dev/null || echo "0")
-            local size_gb=$(echo "scale=1; $size_bytes/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
-            local basename_file=$(basename "$file")
+            local size_bytes
+            size_bytes=$(stat -c%s "$file" 2>/dev/null || echo "0")
+            local size_gb
+            size_gb=$(echo "scale=1; $size_bytes/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
+            local basename_file
+            basename_file=$(basename "$file")
 
             # Flag for removal based on size and format
             if (( $(echo "$size_gb > 10" | bc -l) )); then
@@ -324,9 +340,12 @@ estimate_space_savings() {
 
     while IFS= read -r -d '' file; do
         if [ -f "$file" ]; then
-            local size_bytes=$(stat -c%s "$file" 2>/dev/null || echo "0")
-            local size_gb=$(echo "scale=1; $size_bytes/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
-            local basename_file=$(basename "$file")
+            local size_bytes
+            size_bytes=$(stat -c%s "$file" 2>/dev/null || echo "0")
+            local size_gb
+            size_gb=$(echo "scale=1; $size_bytes/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
+            local basename_file
+            basename_file=$(basename "$file")
 
             total_size=$((total_size + size_bytes))
 
@@ -340,9 +359,12 @@ estimate_space_savings() {
         fi
     done < <(find "$wan21_dir" -name "*.safetensors" -type f -print0 2>/dev/null)
 
-    local total_gb=$(echo "scale=1; $total_size/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
-    local removable_gb=$(echo "scale=1; $removable_size/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
-    local keep_gb=$(echo "scale=1; $keep_size/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
+    local total_gb
+    total_gb=$(echo "scale=1; $total_size/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
+    local removable_gb
+    removable_gb=$(echo "scale=1; $removable_size/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
+    local keep_gb
+    keep_gb=$(echo "scale=1; $keep_size/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
 
     echo -e "${CYAN}=== SPACE SAVINGS ESTIMATE ===${NC}"
     echo "  Current total: ${total_gb}GB"
@@ -382,9 +404,12 @@ interactive_model_review() {
 
     while IFS= read -r -d '' file; do
         if [ -f "$file" ]; then
-            local size_bytes=$(stat -c%s "$file" 2>/dev/null || echo "0")
-            local size_gb=$(echo "scale=1; $size_bytes/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
-            local basename_file=$(basename "$file")
+            local size_bytes
+            size_bytes=$(stat -c%s "$file" 2>/dev/null || echo "0")
+            local size_gb
+            size_gb=$(echo "scale=1; $size_bytes/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
+            local basename_file
+            basename_file=$(basename "$file")
 
             # Only review large files
             if (( $(echo "$size_gb > 3" | bc -l) )); then

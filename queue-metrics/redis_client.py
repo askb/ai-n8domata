@@ -94,7 +94,7 @@ class RedisClient:
 
         # If none of the patterns worked
         logger.warning(
-            f"No valid queue keys found from {key_patterns}, assuming length 0"
+            f"No valid queue keys found from {key_patterns}, " f"assuming length 0"
         )
         return 0
 

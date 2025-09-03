@@ -72,7 +72,8 @@ class DockerConfig(BaseModel):
     """Docker Compose configuration."""
 
     compose_file: str = Field(
-        default="/app/docker-compose.yml", description="Path to docker-compose.yml"
+        default="/app/docker-compose.yml",
+        description="Path to docker-compose.yml",
     )
     project_name: str = Field(..., description="Docker Compose project name")
     service_name: str = Field(
@@ -91,7 +92,8 @@ class TimingConfig(BaseModel):
 
     polling_interval: int = Field(default=30, description="Polling interval in seconds")
     cooldown_period: int = Field(
-        default=120, description="Cooldown period between scaling actions in seconds"
+        default=120,
+        description="Cooldown period between scaling actions in seconds",
     )
 
     @validator("polling_interval")

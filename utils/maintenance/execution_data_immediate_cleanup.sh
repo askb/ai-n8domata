@@ -75,7 +75,7 @@ echo "(4) SHOW MORE INFO: Don't clean yet, show more analysis"
 echo "(5) SKIP: Don't clean now"
 echo ""
 
-read -p "Choose option (1-5): " choice
+read -r -p "Choose option (1-5): " choice
 
 case $choice in
     1)

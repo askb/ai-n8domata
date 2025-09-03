@@ -143,7 +143,8 @@ class DockerManager:
 
             if not os.path.exists(self.config.compose_file):
                 logger.error(
-                    "Docker compose file not found", file=self.config.compose_file
+                    "Docker compose file not found",
+                    file=self.config.compose_file,
                 )
                 return False
 

@@ -27,7 +27,7 @@ echo "C. STOP AI agent temporarily"
 echo "D. SHOW MORE DIAGNOSTICS"
 echo ""
 
-read -p "Choose option (A/B/C/D): " ai_fix_choice
+read -r -p "Choose option (A/B/C/D): " ai_fix_choice
 
 case $ai_fix_choice in
     A|a)
@@ -49,7 +49,7 @@ case $ai_fix_choice in
         echo "Current limit: 16GB"
         echo "Suggested new limit: 8GB"
         echo ""
-        read -p "Enter new memory limit (e.g., 8G): " new_limit
+        read -r -p "Enter new memory limit (e.g., 8G): " new_limit
 
         echo "Stopping AI agent..."
         docker compose stop ai-agent-cpu

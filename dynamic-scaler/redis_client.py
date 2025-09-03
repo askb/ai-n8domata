@@ -30,12 +30,16 @@ class RedisClient:
             )
             self._client.ping()
             logger.info(
-                "Connected to Redis", host=self.config.host, port=self.config.port
+                "Connected to Redis",
+                host=self.config.host,
+                port=self.config.port,
             )
             return True
         except redis.ConnectionError as e:
             logger.error(
-                "Failed to connect to Redis", error=str(e), host=self.config.host
+                "Failed to connect to Redis",
+                error=str(e),
+                host=self.config.host,
             )
             return False
         except Exception as e:
@@ -85,7 +89,9 @@ class RedisClient:
                 length = self._client.llen(key_pattern)
                 if length is not None and length >= 0:
                     logger.debug(
-                        "Queue length retrieved", key=key_pattern, length=length
+                        "Queue length retrieved",
+                        key=key_pattern,
+                        length=length,
                     )
                     return length
             except redis.ResponseError as e:

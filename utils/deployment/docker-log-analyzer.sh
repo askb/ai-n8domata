@@ -8,7 +8,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
+# PURPLE='\033[0;35m'  # Unused color
 CYAN='\033[0;36m'
 NC='\033[0m'
 
@@ -62,10 +62,10 @@ analyze_container_logs() {
 
     # Get container info
     echo -e "${BLUE}Container Info:${NC}"
-    docker inspect "$container_name" --format "{{.State.Status}}" | while read status; do
+    docker inspect "$container_name" --format "{{.State.Status}}" | while IFS= read -r status; do
         echo "  Status: $status"
     done
-    docker inspect "$container_name" --format "{{.Created}}" | while read created; do
+    docker inspect "$container_name" --format "{{.Created}}" | while IFS= read -r created; do
         echo "  Created: $created"
     done
 
@@ -103,13 +103,13 @@ analyze_model_loading() {
 
     # Look for model loading patterns
     echo -e "\n🔍 Models that were loaded successfully:"
-    grep -i "load.*model\|loading.*model\|model.*load" "$log_file" | grep -v -i "fail\|error\|exception" | head -10 | while read line; do
+    grep -i "load.*model\|loading.*model\|model.*load" "$log_file" | grep -v -i "fail\|error\|exception" | head -10 | while IFS= read -r line; do
         echo "  ✅ $line"
     done
 
     # Look for specific model file names
     echo -e "\n🔍 Specific model files mentioned:"
-    grep -E "(wan2\.1|cogvideo|\.safetensors|\.ckpt|\.pth)" "$log_file" | head -10 | while read line; do
+    grep -E "(wan2\.1|cogvideo|\.safetensors|\.ckpt|\.pth)" "$log_file" | head -10 | while IFS= read -r line; do
         # Check if it's a success or failure
         if echo "$line" | grep -qi "error\|fail\|exception\|out of memory"; then
             echo "  ❌ $line"
@@ -126,22 +126,22 @@ analyze_model_failures() {
 
     # Look for common failure patterns
     echo -e "\n🚫 VRAM/Memory failures:"
-    grep -i "out of memory\|oom\|cuda out of memory\|not enough memory\|memory error" "$log_file" | head -5 | while read line; do
+    grep -i "out of memory\|oom\|cuda out of memory\|not enough memory\|memory error" "$log_file" | head -5 | while IFS= read -r line; do
         echo "  💥 $line"
     done
 
     echo -e "\n🚫 Model loading failures:"
-    grep -i "failed to load\|cannot load\|model.*error\|loading.*fail" "$log_file" | head -5 | while read line; do
+    grep -i "failed to load\|cannot load\|model.*error\|loading.*fail" "$log_file" | head -5 | while IFS= read -r line; do
         echo "  💥 $line"
     done
 
     echo -e "\n🚫 Format/compatibility issues:"
-    grep -i "unsupported\|incompatible\|format.*error\|dtype.*error" "$log_file" | head -5 | while read line; do
+    grep -i "unsupported\|incompatible\|format.*error\|dtype.*error" "$log_file" | head -5 | while IFS= read -r line; do
         echo "  💥 $line"
     done
 
     echo -e "\n🚫 ROCm/AMD specific errors:"
-    grep -i "rocm\|hip\|amd\|gfx.*error" "$log_file" | head -5 | while read line; do
+    grep -i "rocm\|hip\|amd\|gfx.*error" "$log_file" | head -5 | while IFS= read -r line; do
         echo "  💥 $line"
     done
 }
@@ -153,13 +153,13 @@ analyze_memory_usage() {
 
     # Look for memory usage patterns
     echo -e "\n📊 Memory allocation info:"
-    grep -i "memory\|vram\|gpu.*memory\|allocated" "$log_file" | grep -E "[0-9]+\s*(MB|GB|bytes)" | head -5 | while read line; do
+    grep -i "memory\|vram\|gpu.*memory\|allocated" "$log_file" | grep -E "[0-9]+\s*(MB|GB|bytes)" | head -5 | while IFS= read -r line; do
         echo "  📈 $line"
     done
 
     # Look for model size information
     echo -e "\n📊 Model size information:"
-    grep -E "([0-9]+\.?[0-9]*)\s*(GB|MB).*model|model.*([0-9]+\.?[0-9]*)\s*(GB|MB)" "$log_file" | head -5 | while read line; do
+    grep -E "([0-9]+\.?[0-9]*)\s*(GB|MB).*model|model.*([0-9]+\.?[0-9]*)\s*(GB|MB)" "$log_file" | head -5 | while IFS= read -r line; do
         echo "  📏 $line"
     done
 }
@@ -171,13 +171,13 @@ analyze_successful_generations() {
 
     # Look for successful generation patterns
     echo -e "\n🎬 Successful video generations:"
-    grep -i "generated\|completed\|finished\|success.*video\|video.*success" "$log_file" | head -5 | while read line; do
+    grep -i "generated\|completed\|finished\|success.*video\|video.*success" "$log_file" | head -5 | while IFS= read -r line; do
         echo "  🎉 $line"
     done
 
     # Look for output file creation
     echo -e "\n💾 Output files created:"
-    grep -i "saved\|output\|wrote.*file\|created.*video" "$log_file" | head -5 | while read line; do
+    grep -i "saved\|output\|wrote.*file\|created.*video" "$log_file" | head -5 | while IFS= read -r line; do
         echo "  💾 $line"
     done
 }
@@ -228,7 +228,7 @@ cross_reference_with_filesystem() {
     echo -e "${BLUE}Your WAN21 models vs log evidence:${NC}"
 
     # For each model file, check if it appears in any container logs
-    find wan21-models -name "*.safetensors" | while read model_path; do
+    find wan21-models -name "*.safetensors" | while IFS= read -r model_path; do
         model_name=$(basename "$model_path")
         model_size=$(du -sh "$model_path" | cut -f1)
 
@@ -250,7 +250,8 @@ cross_reference_with_filesystem() {
 }
 
 generate_cleanup_report() {
-    local analysis_date=$(date +%Y%m%d-%H%M%S)
+    local analysis_date
+    analysis_date=$(date +%Y%m%d-%H%M%S)
     local report_file="docker-log-model-analysis-${analysis_date}.txt"
 
     print_status "Generating comprehensive model usage report..."
@@ -304,10 +305,10 @@ interactive_log_analysis() {
     docker ps -a --format "{{.Names}}" | nl
     echo
 
-    read -p "Enter container name to analyze (or 'all' for all containers): " container_choice
+    read -r -p "Enter container name to analyze (or 'all' for all containers): " container_choice
 
     if [ "$container_choice" = "all" ]; then
-        docker ps -a --format "{{.Names}}" | while read container; do
+        docker ps -a --format "{{.Names}}" | while IFS= read -r container; do
             echo -e "\n${BLUE}=== ANALYZING $container ===${NC}"
             analyze_container_logs "$container" 500
         done

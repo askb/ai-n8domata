@@ -41,11 +41,16 @@ show_file_details() {
         return 1
     fi
 
-    local filename=$(basename "$file_path")
-    local file_size_bytes=$(stat -c%s "$file_path" 2>/dev/null || echo "0")
-    local file_size_human=$(du -sh "$file_path" 2>/dev/null | cut -f1 || echo "Unknown")
-    local file_size_gb=$(echo "scale=1; $file_size_bytes/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
-    local last_modified=$(stat -c %y "$file_path" 2>/dev/null | cut -d' ' -f1 || echo "Unknown")
+    local filename
+    filename=$(basename "$file_path")
+    local file_size_bytes
+    file_size_bytes=$(stat -c%s "$file_path" 2>/dev/null || echo "0")
+    local file_size_human
+    file_size_human=$(du -sh "$file_path" 2>/dev/null | cut -f1 || echo "Unknown")
+    local file_size_gb
+    file_size_gb=$(echo "scale=1; $file_size_bytes/1024/1024/1024" | bc -l 2>/dev/null || echo "0")
+    local last_modified
+    last_modified=$(stat -c %y "$file_path" 2>/dev/null | cut -d' ' -f1 || echo "Unknown")
 
     echo -e "\n${CYAN}📁 File Details:${NC}"
     echo "   Name: $filename"
@@ -85,7 +90,8 @@ show_file_details() {
 
     # Show directory context
     echo -e "\n${CYAN}📂 Directory Context:${NC}"
-    local parent_dir=$(dirname "$file_path")
+    local parent_dir
+    parent_dir=$(dirname "$file_path")
     echo "   Directory: $parent_dir"
     echo "   Other files in directory:"
     ls -lah "$parent_dir" | head -5 | sed 's/^/     /'
@@ -143,7 +149,8 @@ ask_for_confirmation() {
 
 backup_file() {
     local file_path="$1"
-    local backup_dir="model-backups-$(date +%Y%m%d)"
+    local backup_dir
+    backup_dir="model-backups-$(date +%Y%m%d)"
 
     print_status "Creating backup of $(basename "$file_path")..."
 
@@ -172,7 +179,8 @@ safe_delete_file() {
     fi
 
     # Get size for reporting
-    local freed_space=$(du -sh "$file_path" | cut -f1)
+    local freed_space
+    freed_space=$(du -sh "$file_path" | cut -f1)
 
     # Delete the file
     if rm "$file_path"; then
@@ -212,7 +220,7 @@ process_removal_candidates() {
     local kept=0
     local skipped=0
     local backed_up=0
-    local total_space_freed=0
+    # local total_space_freed=0  # Unused variable
 
     echo "Found $total_candidates model files to review"
     echo
@@ -315,7 +323,7 @@ interactive_custom_removal() {
 
     while true; do
         echo -e "${BLUE}Enter path to model file to review (or 'quit' to exit):${NC}"
-        read -p "File path: " file_path
+        read -r -p "File path: " file_path
 
         if [ "$file_path" = "quit" ] || [ "$file_path" = "q" ]; then
             break

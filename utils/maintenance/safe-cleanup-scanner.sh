@@ -8,7 +8,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
+# PURPLE='\033[0;35m'  # Unused color
 NC='\033[0m'
 
 # Critical directories that should NEVER be deleted
@@ -370,7 +370,7 @@ interactive_cleanup() {
         echo "5) Show current disk usage"
         echo "6) Exit"
         echo
-        read -p "Choose option (1-6): " choice
+        read -r -p "Choose option (1-6): " choice
 
         case $choice in
             1) cleanup_virtual_environments ;;
@@ -381,7 +381,7 @@ interactive_cleanup() {
                 echo -e "\n${BLUE}Current disk usage:${NC}"
                 df -h .
                 echo -e "\nLargest directories:"
-                du -sh */ 2>/dev/null | sort -hr | head -10
+                du -sh ./*/ 2>/dev/null | sort -hr | head -10
                 ;;
             6)
                 echo "Exiting cleanup executor"

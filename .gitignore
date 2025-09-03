@@ -90,6 +90,10 @@ venv.bak/
 *.swo
 *~
 
+# Claude Code
+.claude/
+.claude/agents/*
+
 # OS
 .DS_Store
 .DS_Store?

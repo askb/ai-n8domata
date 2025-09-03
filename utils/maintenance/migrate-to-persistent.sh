@@ -56,7 +56,7 @@ stop_existing_services() {
     print_status "Stopping any existing AI video services..."
 
     # Stop any running containers that look like they might be CogVideo/WAN21
-    docker ps --format "{{.Names}}" | grep -E "(comfy|cog|wan|video)" | while read container; do
+    docker ps --format "{{.Names}}" | grep -E "(comfy|cog|wan|video)" | while IFS= read -r container; do
         if [ ! -z "$container" ]; then
             print_warning "Stopping container: $container"
             docker stop "$container" || true
