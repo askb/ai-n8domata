@@ -16,8 +16,8 @@ jobs:
             dockerfile: Dockerfile
             context: .
           - name: queue-metrics
-            dockerfile: Dockerfile.queue-metrics
-            context: queue-metrics
+            dockerfile: queue-metrics/Dockerfile.queue-metrics
+            context: .
           - name: dynamic-scaler
             dockerfile: dynamic-scaler/Dockerfile.dynamic-scaler
             context: .
@@ -35,7 +35,7 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: ${{ matrix.service.context }}
-        file: ${{ matrix.service.context }}/${{ matrix.service.dockerfile }}
+        file: ${{ matrix.service.dockerfile }}
         push: false
         tags: test-${{ matrix.service.name }}:latest
         cache-from: type=gha
