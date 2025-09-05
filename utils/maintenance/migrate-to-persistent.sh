@@ -232,7 +232,7 @@ update_docker_compose() {
     print_status "Updating docker-compose.yml..."
 
     # Create backup of current compose file
-    cp docker-compose.yml docker-compose.yml.backup-$(date +%Y%m%d-%H%M%S)
+    cp docker-compose.yml "docker-compose.yml.backup-$(date +%Y%m%d-%H%M%S)"
 
     print_warning "You need to manually add the CogVideo and WAN21 services to your docker-compose.yml"
     print_warning "The service definitions have been provided in the artifacts."
