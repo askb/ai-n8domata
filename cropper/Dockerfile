@@ -23,7 +23,7 @@ RUN pip install --no-cache-dir \
     requests==2.31.0
 
 # Copy the application
-COPY cropper/cropper.py .
+COPY cropper.py .
 
 # Create videos directory
 RUN mkdir -p /app/videos
