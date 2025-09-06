@@ -22,8 +22,8 @@ jobs:
             dockerfile: dynamic-scaler/Dockerfile.dynamic-scaler
             context: .
           - name: intelligent-cropper
-            dockerfile: cropper/Dockerfile
-            context: .
+            dockerfile: Dockerfile
+            context: cropper
 
     steps:
     - uses: actions/checkout@v4
