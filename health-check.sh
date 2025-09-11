@@ -19,7 +19,7 @@ check_service() {
 
     echo -n "Checking $service_name... "
 
-    if curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$url" 2>/dev/null | grep -q "$expected_response"; then
+    if curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$url" 2>/dev/null | grep -E -q "$expected_response"; then
         echo -e "${GREEN}✅ HEALTHY${NC}"
         return 0
     else
@@ -134,9 +134,22 @@ else
     check_postgres || true
 
     # Check web services
-    check_service "N8N Web" "http://localhost:5678/healthz" "200|302" || true
-    check_service "Queue Metrics" "http://localhost:8080/health" "200" || true
-    check_service "Dynamic Scaler" "http://localhost:8081/health" "200" || true
+    check_service "N8N Web" "http://localhost:5678" "200|302" || true
+
+    # Check queue-metrics and dynamic-scaler via Docker health status instead of HTTP
+    echo -n "Checking Queue Metrics... "
+    if docker inspect n8n-queue-metrics --format='{{.State.Health.Status}}' 2>/dev/null | grep -q "healthy"; then
+        echo -e "${GREEN}✅ HEALTHY${NC}"
+    else
+        echo -e "${RED}❌ UNHEALTHY${NC}"
+    fi
+
+    echo -n "Checking Dynamic Scaler... "
+    if docker inspect n8n-dynamic-scaler --format='{{.State.Health.Status}}' 2>/dev/null | grep -q "healthy"; then
+        echo -e "${GREEN}✅ HEALTHY${NC}"
+    else
+        echo -e "${RED}❌ UNHEALTHY${NC}"
+    fi
 
     # Check Prometheus & Grafana if running
     if docker compose ps 2>/dev/null | grep -q prometheus; then

@@ -52,6 +52,12 @@ x-n8n: &service-n8n
     - N8N_DEFAULT_BINARY_DATA_MODE=filesystem
     - N8N_BINARY_DATA_TTL=1440
     - N8N_BINARY_DATA_STORAGE_PATH=/home/node/.n8n/binaryData
+    # Push notification configuration for better connection stability
+    - N8N_SECURE_COOKIE=${N8N_SECURE_COOKIE}
+    # WebSocket and connectivity configuration
+    - N8N_DISABLE_UI=false
+    - N8N_EDITOR_ENABLE_WEBHOOKS=true
+    - N8N_PUSH_BACKEND=websocket
 
 services:
   cloudflared:
@@ -171,15 +177,26 @@ services:
     networks:
       - n8n-network
     healthcheck:
-      test: ["CMD", "node", "-v"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5678"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.n8n-ui.rule=Host(`${N8N_HOST}`)"
+      # Primary n8n router for Cloudflare tunnel traffic on port 8082
+      - "traefik.http.routers.n8n-ui.rule=Host(`${N8N_HOST}`) || Host(`localhost`)"
       - "traefik.http.routers.n8n-ui.entrypoints=n8n_ui"
+      - "traefik.http.routers.n8n-ui.priority=100"
+      - "traefik.http.routers.n8n-ui.service=n8n"
+      - "traefik.http.routers.n8n-ui.middlewares=n8n-headers"
+      # Enhanced headers middleware for WebSocket and proper forwarding
+      - "traefik.http.middlewares.n8n-headers.headers.customRequestHeaders.X-Forwarded-Proto=https"
+      - "traefik.http.middlewares.n8n-headers.headers.customRequestHeaders.X-Forwarded-Host=${N8N_HOST}"
+      - "traefik.http.middlewares.n8n-headers.headers.customRequestHeaders.Host=${N8N_HOST}"
+      - "traefik.http.middlewares.n8n-headers.headers.customRequestHeaders.X-Real-IP="
+      - "traefik.http.middlewares.n8n-headers.headers.customRequestHeaders.X-Forwarded-For="
+      # Webhook router on port 8083
       - "traefik.http.routers.n8n-webhooks.rule=Host(`${N8N_WEBHOOK}`)"
       - "traefik.http.routers.n8n-webhooks.entrypoints=n8n_webhooks"
       - "traefik.http.services.n8n.loadbalancer.server.port=5678"
@@ -259,6 +276,8 @@ services:
     profiles:
       - core
     restart: unless-stopped
+    group_add:
+      - "977"
     environment:
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
@@ -409,7 +428,7 @@ services:
           memory: 2G
           cpus: "1.0"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8008/docs"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/docs"]
       interval: 30s
       timeout: 10s
       retries: 5
