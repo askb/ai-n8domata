@@ -73,7 +73,7 @@ services:
       - core
 
   traefik:
-    image: traefik:v2.10
+    image: traefik:v3.6
     container_name: n8n-traefik
     restart: unless-stopped
     networks:
@@ -86,6 +86,8 @@ services:
       - "--providers.docker=true"
       - "--api.insecure=true"
       - "--providers.docker.exposedbydefault=false"
+      # Traefik v3: use v2 rule syntax for backward compatibility
+      - "--core.defaultRuleSyntax=v2"
       # CLOUDFLARE TUNNEL SETUP - Only HTTP needed (Cloudflare handles SSL)
       - "--entrypoints.web.address=:80"
       # Keep existing N8N specific entrypoints
@@ -117,7 +119,7 @@ services:
       - "traefik.http.middlewares.rate-limit.ratelimit.average=100"
       - "traefik.http.middlewares.rate-limit.ratelimit.burst=200"
       # IP whitelist middleware (replace with your IP)
-      - "traefik.http.middlewares.ip-whitelist.ipwhitelist.sourcerange=${IP_WHITELIST_RANGE}"
+      - "traefik.http.middlewares.ip-whitelist.ipallowlist.sourcerange=${IP_WHITELIST_RANGE}"
 
   redis:
     image: redis:7-alpine
@@ -160,6 +162,12 @@ services:
   n8n:
     <<: *service-n8n
     container_name: n8n-main
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+        reservations:
+          memory: 512m
     ports:
       - "5678:5678"
       - "5679:5679"
@@ -204,6 +212,12 @@ services:
   n8n-webhook:
     <<: *service-n8n
     container_name: n8n-webhook
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 256m
     command: sh /webhook
     volumes:
       - ./backups/n8n-data:/n8n
@@ -221,6 +235,12 @@ services:
   n8n-worker:
     <<: *service-n8n
     container_name: n8n-worker
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+        reservations:
+          memory: 512m
     stop_grace_period: 5m
     command: sh /worker
     volumes:
@@ -441,7 +461,7 @@ services:
       - "traefik.http.services.ai-agent-cpu.loadbalancer.server.port=8000"
 
   miniio:
-    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z  # Last available - MinIO archived Feb 2026
     container_name: n8n-miniio
     restart: unless-stopped
     profiles:
@@ -469,7 +489,7 @@ services:
       - "traefik.http.services.minio-console.loadbalancer.server.port=9001"
 
   kokoro-tts:
-    image: ghcr.io/remsky/kokoro-fastapi-cpu:v0.2.2
+    image: ghcr.io/remsky/kokoro-fastapi-cpu:v0.2.4
     container_name: n8n-kokoro-tts
     restart: unless-stopped
     profiles:
@@ -492,7 +512,8 @@ services:
       - "traefik.http.services.kokoro-tts.loadbalancer.server.port=8880"
 
   baserow:
-    image: baserow/baserow:1.32.5
+    image: baserow/baserow:1.32.5  # TODO: upgrade to 2.x after verifying data migration
+    # Baserow 2.x is a major version jump - test separately
     container_name: n8n-baserow
     restart: unless-stopped
     profiles:
@@ -507,6 +528,12 @@ services:
     volumes:
       - ./data/baserow:/baserow/data
     shm_size: 256mb
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+        reservations:
+          memory: 512m
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.baserow.rule=Host(`${BASEROW_HOST}`)"
@@ -524,6 +551,12 @@ services:
       - n8n-network
     ports:
       - "8080:8080"
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+        reservations:
+          memory: 256m
     environment:
       API_KEY: ${NCAT_API_KEY}
       S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
