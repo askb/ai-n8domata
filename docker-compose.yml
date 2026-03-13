@@ -165,7 +165,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2g
+          memory: 4g
         reservations:
           memory: 512m
     ports:
@@ -215,7 +215,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1g
+          memory: 2g
         reservations:
           memory: 256m
     command: sh /webhook
@@ -238,7 +238,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2g
+          memory: 4g
         reservations:
           memory: 512m
     stop_grace_period: 5m
@@ -392,6 +392,12 @@ services:
       - core
     networks:
       - n8n-network
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+        reservations:
+          memory: 512m
     environment:
       - LOG_LEVEL=error
       - PEXELS_API_KEY=${PEXELS_API_KEY}
@@ -411,7 +417,7 @@ services:
       - "traefik.http.services.short-video-maker.loadbalancer.server.port=3123"
 
   ai-agent-cpu:
-    image: gyoridavid/ai-agents-no-code-tools:latest
+    image: gyoridavid/ai-agents-no-code-tools:0.3.6
     container_name: n8n-ai-agent-cpu
     restart: unless-stopped
     profiles:
@@ -442,7 +448,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 16G
+          memory: 8G
           cpus: "8.0"
         reservations:
           memory: 2G
@@ -498,6 +504,12 @@ services:
       - n8n-network
     ports:
       - "8880:8880"
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+        reservations:
+          memory: 1g
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8880/health"]
       interval: 30s
@@ -531,9 +543,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2g
+          memory: 4g
         reservations:
-          memory: 512m
+          memory: 1g
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.baserow.rule=Host(`${BASEROW_HOST}`)"
@@ -554,7 +566,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2g
+          memory: 4g
         reservations:
           memory: 256m
     environment:
