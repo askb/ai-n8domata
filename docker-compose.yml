@@ -48,6 +48,9 @@ x-n8n: &service-n8n
     - N8N_TASK_BROKER_PORT=${N8N_TASK_BROKER_PORT}
     - NODE_FUNCTION_ALLOW_EXTERNAL=ajv,ajv-formats,puppeteer
     - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+    # n8n 2.x disables ExecuteCommand & LocalFileTrigger by default;
+    # override with empty list to re-enable for existing workflows.
+    - NODES_EXCLUDE=${NODES_EXCLUDE}
     # BINARY DATA CONFIGURATION - ADD THESE LINES
     - N8N_DEFAULT_BINARY_DATA_MODE=filesystem
     - N8N_BINARY_DATA_TTL=1440
