@@ -422,10 +422,7 @@ class VideoCropper:
             for kept in deduped:
                 kcx = kept[0] + kept[2] / 2.0
                 kcy = kept[1] + kept[3] / 2.0
-                if (
-                    abs(fcx - kcx) < kept[2] * 0.5
-                    and abs(fcy - kcy) < kept[3] * 0.5
-                ):
+                if abs(fcx - kcx) < kept[2] * 0.5 and abs(fcy - kcy) < kept[3] * 0.5:
                     is_dup = True
                     break
             if not is_dup:
@@ -460,6 +457,84 @@ class VideoCropper:
             return area * center_penalty
 
         return max(faces, key=rank)
+
+    @staticmethod
+    def _area(face: Tuple[int, int, int, int, float]) -> float:
+        return float(face[2] * face[3])
+
+    def _select_speaker(
+        self,
+        faces: List[Tuple[int, int, int, int, float]],
+        frame_w: int,
+        frame_h: int,
+        state: Dict,
+    ) -> Optional[Tuple[int, int, int, int, float]]:
+        """Stateful active-speaker proxy with lock + switch hysteresis.
+
+        The stateless "largest face" proxy flips between people in multi-face
+        (interview/panel) shots, so the vertical crop oscillates and often
+        frames the wrong (silent) person or the empty gap between them. This
+        keeps the crop LOCKED on one face and only switches to a different face
+        after that face has stayed clearly larger for a sustained run of
+        samples. Brief cutaways are held by the caller's gap-fill instead of
+        snapping to whoever is on screen.
+
+        state keys: locked_cx, challenger_cx, challenger_count, switch_hold,
+        switch_margin, near_tol.
+        """
+        if not faces:
+            return None
+
+        best = self._pick_dominant_face(faces, frame_w, frame_h)
+        locked_cx = state.get("locked_cx")
+        if locked_cx is None:
+            state["locked_cx"] = best[0] + best[2] / 2.0
+            state["challenger_cx"] = None
+            state["challenger_count"] = 0
+            return best
+
+        near_tol = state["near_tol"]
+        # Incumbent = the face nearest the currently locked speaker center.
+        incumbent = min(faces, key=lambda f: abs((f[0] + f[2] / 2.0) - locked_cx))
+        inc_cx = incumbent[0] + incumbent[2] / 2.0
+        present = abs(inc_cx - locked_cx) <= near_tol
+        best_cx = best[0] + best[2] / 2.0
+
+        if present:
+            # Only a clearly larger, sufficiently different face can challenge.
+            challenger = (
+                abs(best_cx - inc_cx) > near_tol
+                and self._area(best) > self._area(incumbent) * state["switch_margin"]
+            )
+        else:
+            # Locked speaker not visible this sample -> the best face is a
+            # re-lock candidate, but still require sustained confirmation.
+            challenger = True
+
+        if challenger:
+            if state.get("challenger_cx") is not None and (
+                abs(best_cx - state["challenger_cx"]) <= near_tol
+            ):
+                state["challenger_count"] += 1
+            else:
+                state["challenger_cx"] = best_cx
+                state["challenger_count"] = 1
+            if state["challenger_count"] >= state["switch_hold"]:
+                state["locked_cx"] = best_cx
+                state["challenger_cx"] = None
+                state["challenger_count"] = 0
+                return best
+        else:
+            state["challenger_cx"] = None
+            state["challenger_count"] = 0
+
+        if present:
+            # Smoothly follow the locked speaker as they shift in their seat.
+            state["locked_cx"] = 0.7 * locked_cx + 0.3 * inc_cx
+            return incumbent
+        # Locked speaker temporarily gone and no sustained replacement yet;
+        # return None so the caller's gap-fill holds the last speaker center.
+        return None
 
     @staticmethod
     def _smooth_centers(centers: List[float], window: int) -> List[float]:
@@ -523,6 +598,18 @@ class VideoCropper:
 
         raw = []
         frame_idx = 0
+        # Speaker-lock state for hysteresis (see _select_speaker). Requires a
+        # different face to stay clearly larger for ~1.2s before the crop
+        # switches speakers, which stops the back-and-forth flicker in
+        # interview/panel shots.
+        track_state = {
+            "locked_cx": None,
+            "challenger_cx": None,
+            "challenger_count": 0,
+            "switch_hold": max(2, int(round(1.2 * sample_fps))),
+            "switch_margin": 1.20,
+            "near_tol": 0.18 * source_w,
+        }
         while True:
             grabbed = cap.grab()
             if not grabbed:
@@ -532,7 +619,7 @@ class VideoCropper:
                 if not ok:
                     break
                 faces = self.detect_faces_scored(frame)
-                dominant = self._pick_dominant_face(faces, source_w, source_h)
+                dominant = self._select_speaker(faces, source_w, source_h, track_state)
                 if dominant:
                     fx, fy, fw, fh, score = dominant
                     face_cx = fx + fw / 2.0
@@ -543,8 +630,14 @@ class VideoCropper:
                     face_cy = source_h / 2.0
                     confidence = 0.0
                 raw.append(
-                    [frame_idx, frame_idx / fps, face_cx, face_cy,
-                     confidence, len(faces)]
+                    [
+                        frame_idx,
+                        frame_idx / fps,
+                        face_cx,
+                        face_cy,
+                        confidence,
+                        len(faces),
+                    ]
                 )
             frame_idx += 1
 
