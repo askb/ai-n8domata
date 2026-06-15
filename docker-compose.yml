@@ -569,9 +569,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 4g
+          memory: 6g
+          cpus: "10.0"
         reservations:
           memory: 256m
+          cpus: "1.0"
     environment:
       API_KEY: ${NCAT_API_KEY}
       S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
@@ -599,6 +601,14 @@ services:
       - n8n-network
     ports:
       - "8888:8888"
+    deploy:
+      resources:
+        limits:
+          memory: 8g
+          cpus: "6.0"
+        reservations:
+          memory: 256m
+          cpus: "0.5"
     volumes:
       - ./videos:/app/videos
     environment:
