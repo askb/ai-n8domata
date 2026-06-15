@@ -3,6 +3,12 @@
 .env.local
 .env.*.local
 
+# Local upgrade/backup snapshots (contain .env + DB dumps — NEVER commit)
+upgrades/
+
+# Empty AI-assistant scratch file
+CLAUDE.md
+
 # Symlinked data directories (exclude both files and dirs)
 backups
 caches
