@@ -1,3 +1,4 @@
+import collections
 import logging
 import os
 from pathlib import Path
@@ -48,6 +49,196 @@ class CropResponse(BaseModel):
     fps: Optional[float] = None
     crop_width: Optional[int] = None
     crop_height: Optional[int] = None
+
+
+# Mouth region (relative to a detected face box) used for the lip-motion
+# signal. Lower part of the face, central width — where talking shows up.
+_MOUTH_Y0 = 0.55
+_MOUTH_Y1 = 1.00
+_MOUTH_X0 = 0.15
+_MOUTH_X1 = 0.85
+_ROI_W, _ROI_H = 48, 32
+
+
+class SpeakerTracker:
+    """Pick the active speaker by mouth motion across per-face tracks.
+
+    Each detected face is tracked by horizontal position. For every sampled
+    frame we extract that face's mouth region (a small fixed-size grayscale
+    patch) and measure how much it changed versus the same track's previous
+    sample — a talking mouth changes a lot, a listening mouth barely moves.
+    This frame-difference signal works even when the face is in profile (where
+    landmark models fail), which is common in interview/panel two-shots. The
+    crop locks onto the talking face and only switches when another face is
+    clearly more active for a sustained moment, so the vertical follows the
+    conversation instead of flickering onto a listener or framing the silent
+    person — the previous size/position heuristic framed the wrong face ~40%
+    of the time in multi-person shots.
+    """
+
+    def __init__(self, source_w: int, source_h: int, sample_fps: float):
+        self.W = source_w
+        self.H = source_h
+        self.match_tol = 0.12 * source_w
+        self.win = max(3, int(round(1.2 * sample_fps)))
+        self.switch_hold = max(2, int(round(1.1 * sample_fps)))
+        self.hold_gap = max(self.win, int(round(1.5 * sample_fps)))
+        self.switch_margin = 1.5
+        self.min_motion = 7.0
+        self.tracks: Dict[int, Dict] = {}
+        self.next_id = 0
+        self.locked_id: Optional[int] = None
+        self.challenger_id: Optional[int] = None
+        self.challenger_count = 0
+
+    def _mouth_roi(self, frame: np.ndarray, box: Tuple[int, int, int, int]):
+        x, y, w, h = box
+        y0 = max(0, int(y + _MOUTH_Y0 * h))
+        y1 = min(self.H, int(y + _MOUTH_Y1 * h))
+        x0 = max(0, int(x + _MOUTH_X0 * w))
+        x1 = min(self.W, int(x + _MOUTH_X1 * w))
+        if y1 <= y0 or x1 <= x0:
+            return None
+        roi = frame[y0:y1, x0:x1]
+        if roi.size == 0:
+            return None
+        gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+        return cv2.resize(gray, (_ROI_W, _ROI_H)).astype(np.float32)
+
+    def _score(self, tr: Dict) -> float:
+        hist = tr["motion"]
+        if not hist:
+            return 0.0
+        recent = list(hist)[-self.win :]
+        return float(np.mean(recent)) if recent else 0.0
+
+    def update(self, frame: np.ndarray, faces: List[Dict], idx: int) -> None:
+        """Match detections to tracks by position; score mouth motion."""
+        used = set()
+        for f in faces:
+            best_id, best_d = None, self.match_tol
+            for tid, tr in self.tracks.items():
+                if tid in used:
+                    continue
+                d = abs(tr["cx"] - f["cx"])
+                if d < best_d:
+                    best_d, best_id = d, tid
+            if best_id is None:
+                best_id = self.next_id
+                self.next_id += 1
+                self.tracks[best_id] = {
+                    "cx": f["cx"],
+                    "cy": f["cy"],
+                    "area": f.get("area", 0.0),
+                    "motion": collections.deque(maxlen=max(8, self.win + 3)),
+                    "roi": None,
+                    "last": idx,
+                }
+            used.add(best_id)
+            tr = self.tracks[best_id]
+            tr["cx"] = 0.6 * tr["cx"] + 0.4 * f["cx"]
+            tr["cy"] = 0.6 * tr["cy"] + 0.4 * f["cy"]
+            tr["area"] = f.get("area", tr["area"])
+            roi = self._mouth_roi(frame, f["box"])
+            motion = 0.0
+            if (
+                roi is not None
+                and tr["roi"] is not None
+                and tr["roi"].shape == roi.shape
+            ):
+                motion = float(np.mean(np.abs(roi - tr["roi"])))
+            tr["roi"] = roi
+            tr["motion"].append(motion)
+            tr["last"] = idx
+        stale = [
+            tid
+            for tid, tr in self.tracks.items()
+            if idx - tr["last"] > self.hold_gap * 2
+        ]
+        for tid in stale:
+            self.tracks.pop(tid, None)
+            if self.locked_id == tid:
+                self.locked_id = None
+
+    def select(self, idx: int) -> Optional[Tuple[float, float, float]]:
+        """Return (cx, cy, motion) of the active speaker for this sample."""
+        present = [(tid, tr) for tid, tr in self.tracks.items() if tr["last"] == idx]
+        scored = sorted(
+            ((tid, tr, self._score(tr)) for tid, tr in present),
+            key=lambda x: x[2],
+            reverse=True,
+        )
+        if self.locked_id not in self.tracks:
+            self.locked_id = None
+        if self.locked_id is None:
+            if not present:
+                return None
+            # Initial lock: the most active face, else the largest (a sensible
+            # default before anyone has spoken long enough to score).
+            if scored and scored[0][2] >= self.min_motion:
+                cand = scored[0][0]
+            else:
+                cand = max(present, key=lambda p: p[1]["area"])[0]
+            self.locked_id = cand
+            self.challenger_id = None
+            self.challenger_count = 0
+            tr = self.tracks[cand]
+            return (tr["cx"], tr["cy"], self._score(tr))
+
+        locked = self.tracks[self.locked_id]
+        locked_present = locked["last"] == idx
+        inc_m = self._score(locked) if locked_present else 0.0
+        best = next(
+            ((tid, tr, m) for tid, tr, m in scored if tid != self.locked_id),
+            None,
+        )
+
+        switch = False
+        if best is not None:
+            b_id, _b_tr, b_m = best
+            if locked_present:
+                strong = (
+                    b_m >= self.min_motion
+                    and b_m > max(inc_m, self.min_motion) * self.switch_margin
+                )
+                need = self.switch_hold
+            else:
+                # Locked speaker not visible this sample (e.g. camera cut):
+                # a present, talking face can take over faster.
+                strong = (
+                    b_m >= self.min_motion or (idx - locked["last"]) > self.hold_gap
+                )
+                need = max(1, self.switch_hold // 2)
+            if strong:
+                if self.challenger_id == b_id:
+                    self.challenger_count += 1
+                else:
+                    self.challenger_id = b_id
+                    self.challenger_count = 1
+                if self.challenger_count >= need:
+                    switch = True
+            else:
+                self.challenger_id = None
+                self.challenger_count = 0
+        else:
+            self.challenger_id = None
+            self.challenger_count = 0
+
+        if switch:
+            self.locked_id = best[0]
+            self.challenger_id = None
+            self.challenger_count = 0
+            tr = self.tracks[self.locked_id]
+            return (tr["cx"], tr["cy"], best[2])
+
+        if locked_present:
+            return (locked["cx"], locked["cy"], inc_m)
+        if (idx - locked["last"]) <= self.hold_gap:
+            # Hold the last speaker position across a brief disappearance.
+            return (locked["cx"], locked["cy"], 0.0)
+        # Locked speaker gone too long -> drop the lock and re-select.
+        self.locked_id = None
+        return self.select(idx)
 
 
 class VideoCropper:
@@ -431,6 +622,24 @@ class VideoCropper:
         return deduped
 
     @staticmethod
+    def _faces_as_dicts(
+        faces: List[Tuple[int, int, int, int, float]],
+    ) -> List[Dict]:
+        """Convert (x,y,w,h,score) tuples to the dicts SpeakerTracker wants."""
+        out: List[Dict] = []
+        for x, y, w, h, sc in faces:
+            out.append(
+                {
+                    "box": (x, y, w, h),
+                    "cx": x + w / 2.0,
+                    "cy": y + h / 2.0,
+                    "area": float(w * h),
+                    "score": sc,
+                }
+            )
+        return out
+
+    @staticmethod
     def _pick_dominant_face(
         faces: List[Tuple[int, int, int, int, float]],
         frame_w: int,
@@ -598,18 +807,11 @@ class VideoCropper:
 
         raw = []
         frame_idx = 0
-        # Speaker-lock state for hysteresis (see _select_speaker). Requires a
-        # different face to stay clearly larger for ~1.2s before the crop
-        # switches speakers, which stops the back-and-forth flicker in
-        # interview/panel shots.
-        track_state = {
-            "locked_cx": None,
-            "challenger_cx": None,
-            "challenger_count": 0,
-            "switch_hold": max(2, int(round(1.2 * sample_fps))),
-            "switch_margin": 1.20,
-            "near_tol": 0.18 * source_w,
-        }
+        # Active-speaker tracker: follows the face whose mouth is actually
+        # moving (lip motion), with a short hold so the crop tracks the
+        # conversation in interview/panel shots without flickering onto a
+        # listener. See SpeakerTracker.
+        tracker = SpeakerTracker(source_w, source_h, sample_fps)
         while True:
             grabbed = cap.grab()
             if not grabbed:
@@ -618,16 +820,16 @@ class VideoCropper:
                 ok, frame = cap.retrieve()
                 if not ok:
                     break
-                faces = self.detect_faces_scored(frame)
-                dominant = self._select_speaker(faces, source_w, source_h, track_state)
-                if dominant:
-                    fx, fy, fw, fh, score = dominant
-                    face_cx = fx + fw / 2.0
-                    face_cy = fy + fh / 2.0
-                    confidence = round(score, 3)
+                faces = self._faces_as_dicts(self.detect_faces_scored(frame))
+                tracker.update(frame, faces, frame_idx)
+                sel = tracker.select(frame_idx)
+                if sel is not None:
+                    face_cx, face_cy, motion = sel
+                    confidence = round(min(1.0, 0.45 + min(motion, 30.0) / 60.0), 3)
                 else:
                     face_cx = source_w / 2.0
                     face_cy = source_h / 2.0
+                    motion = 0.0
                     confidence = 0.0
                 raw.append(
                     [
@@ -637,6 +839,7 @@ class VideoCropper:
                         face_cy,
                         confidence,
                         len(faces),
+                        round(motion, 2),
                     ]
                 )
             frame_idx += 1
@@ -681,7 +884,7 @@ class VideoCropper:
         crop_regions = []
         max_x = max(0, source_w - crop_w)
         for r, smooth_cx, tracked in zip(raw, centers, tracked_flags):
-            frame_no, timestamp, _cx, face_cy, confidence, num_faces = r
+            frame_no, timestamp, _cx, face_cy, confidence, num_faces, speaking = r
             crop_x = int(round(min(max(smooth_cx - crop_w / 2.0, 0), max_x)))
             crop_regions.append(
                 {
@@ -696,6 +899,7 @@ class VideoCropper:
                     "num_faces": num_faces,
                     "confidence": confidence,
                     "tracked": tracked,
+                    "speaking_score": speaking,
                 }
             )
 
