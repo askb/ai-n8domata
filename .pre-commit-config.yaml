@@ -57,7 +57,7 @@ repos:
       - id: hadolint-docker
         args: ['--ignore', 'DL3008', '--ignore', 'DL3009', '--ignore', 'DL3015', '--ignore', 'DL3016']
         # Match GitHub Actions: lint same Dockerfiles
-        files: ^(Dockerfile|queue-metrics/Dockerfile\.queue-metrics|dynamic-scaler/Dockerfile\.dynamic-scaler|cropper/Dockerfile)$
+        files: ^(Dockerfile|queue-metrics/Dockerfile\.queue-metrics|dynamic-scaler/Dockerfile\.dynamic-scaler|cropper/Dockerfile|nca-toolkit/Dockerfile)$
 
   # Shell script linting - match GitHub Actions scandir: './utils'
   - repo: https://github.com/koalaman/shellcheck-precommit

@@ -557,7 +557,12 @@ services:
       - "traefik.http.services.baserow.loadbalancer.server.port=80"
 
   nca-toolkit:
-    image: stephengpope/no-code-architects-toolkit:latest
+    # Custom image: upstream toolkit (digest-pinned) + up-to-date yt-dlp.
+    # See nca-toolkit/Dockerfile and TODO-MASTER-TRACKER N18.
+    build:
+      context: ./nca-toolkit
+      dockerfile: Dockerfile
+    image: n8n-nca-toolkit-ytdlp:local
     container_name: n8n-nca-toolkit
     restart: unless-stopped
     profiles:
