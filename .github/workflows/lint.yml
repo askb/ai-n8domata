@@ -58,6 +58,7 @@ jobs:
           queue-metrics/Dockerfile.queue-metrics
           dynamic-scaler/Dockerfile.dynamic-scaler
           cropper/Dockerfile
+          nca-toolkit/Dockerfile
         failure-threshold: warning
 
   yaml-lint:
