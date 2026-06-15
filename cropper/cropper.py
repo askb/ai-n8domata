@@ -31,11 +31,23 @@ class CropRequest(BaseModel):
     smoothing_window: int = 5
 
 
+class SpeakerCropRequest(BaseModel):
+    video_path: str
+    target_aspect_ratio: str = "9:16"
+    sample_fps: float = 4.0
+    smoothing_window: int = 7
+
+
 class CropResponse(BaseModel):
     success: bool
     message: str
     crop_regions: Optional[List[Dict]] = None
     ffmpeg_command: Optional[str] = None
+    source_width: Optional[int] = None
+    source_height: Optional[int] = None
+    fps: Optional[float] = None
+    crop_width: Optional[int] = None
+    crop_height: Optional[int] = None
 
 
 class VideoCropper:
@@ -43,6 +55,13 @@ class VideoCropper:
         self.face_detection = mp_face_detection.FaceDetection(
             model_selection=1,  # 1 for long-range detection
             min_detection_confidence=0.5,
+        )
+        # Short-range model (model_selection=0) is better for close-up
+        # talking-head framing. Used only by the speaker-tracking path to
+        # maximize recall; /analyze keeps using the long-range model above.
+        self.face_detection_short = mp_face_detection.FaceDetection(
+            model_selection=0,
+            min_detection_confidence=0.4,
         )
 
     def download_video(self, url: str) -> str:
@@ -366,6 +385,238 @@ class VideoCropper:
             "resolved_path": resolved_path,
         }
 
+    def detect_faces_scored(
+        self, frame: np.ndarray
+    ) -> List[Tuple[int, int, int, int, float]]:
+        """Detect faces (both MediaPipe models) with detection score.
+
+        Runs the short-range and long-range models and merges results,
+        de-duplicating overlapping detections, to maximize recall on varied
+        framing. Returns absolute-pixel boxes with score.
+        """
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        h, w, _ = frame.shape
+
+        candidates = []
+        for model in (self.face_detection_short, self.face_detection):
+            results = model.process(rgb_frame)
+            if not results.detections:
+                continue
+            for detection in results.detections:
+                bbox = detection.location_data.relative_bounding_box
+                x = int(bbox.xmin * w)
+                y = int(bbox.ymin * h)
+                width = int(bbox.width * w)
+                height = int(bbox.height * h)
+                if width <= 0 or height <= 0:
+                    continue
+                score = float(detection.score[0]) if detection.score else 0.5
+                candidates.append((x, y, width, height, score))
+
+        # De-duplicate: keep largest first, drop boxes with near-identical center
+        deduped: List[Tuple[int, int, int, int, float]] = []
+        for face in sorted(candidates, key=lambda f: f[2] * f[3], reverse=True):
+            fcx = face[0] + face[2] / 2.0
+            fcy = face[1] + face[3] / 2.0
+            is_dup = False
+            for kept in deduped:
+                kcx = kept[0] + kept[2] / 2.0
+                kcy = kept[1] + kept[3] / 2.0
+                if (
+                    abs(fcx - kcx) < kept[2] * 0.5
+                    and abs(fcy - kcy) < kept[3] * 0.5
+                ):
+                    is_dup = True
+                    break
+            if not is_dup:
+                deduped.append(face)
+
+        return deduped
+
+    @staticmethod
+    def _pick_dominant_face(
+        faces: List[Tuple[int, int, int, int, float]],
+        frame_w: int,
+        frame_h: int,
+    ) -> Optional[Tuple[int, int, int, int, float]]:
+        """Pick the active-speaker proxy: largest face, biased toward center.
+
+        Without audio we approximate the active speaker by the face that is
+        closest to the camera (largest bounding box), with a mild bias toward
+        the frame center so a momentary large background face does not win.
+        """
+        if not faces:
+            return None
+
+        cx_frame = frame_w / 2.0
+
+        def rank(face: Tuple[int, int, int, int, float]) -> float:
+            x, _y, w, h, _s = face
+            area = float(w * h)
+            face_cx = x + w / 2.0
+            center_penalty = 1.0 - 0.25 * min(
+                1.0, abs(face_cx - cx_frame) / (frame_w / 2.0)
+            )
+            return area * center_penalty
+
+        return max(faces, key=rank)
+
+    @staticmethod
+    def _smooth_centers(centers: List[float], window: int) -> List[float]:
+        """Moving-average smoothing of face-center x to reduce jitter."""
+        if window < 2 or len(centers) < 2:
+            return centers
+        half = window // 2
+        smoothed = []
+        n = len(centers)
+        for i in range(n):
+            start = max(0, i - half)
+            end = min(n, i + half + 1)
+            seg = centers[start:end]
+            smoothed.append(sum(seg) / len(seg))
+        return smoothed
+
+    def analyze_video_speaker(
+        self,
+        video_path: str,
+        target_aspect_ratio: str = "9:16",
+        sample_fps: float = 4.0,
+        smoothing_window: int = 7,
+        **kwargs,
+    ) -> Dict:
+        """Active-speaker-aware analysis.
+
+        Samples the video at a fixed cadence, locks onto the dominant face per
+        sample, and returns a full-height vertical (9:16) crop timeline centered
+        on that face. Includes source dimensions so the caller can normalize
+        coordinates correctly regardless of source resolution.
+        """
+        resolved_path = self.resolve_video_path(video_path)
+        if not os.path.exists(resolved_path):
+            raise FileNotFoundError(f"Video file not found: {resolved_path}")
+
+        cap = cv2.VideoCapture(resolved_path)
+        if not cap.isOpened():
+            raise ValueError(f"Cannot open video file: {resolved_path}")
+
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+        if fps <= 0:
+            fps = 30.0
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        source_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        source_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        aspect_parts = target_aspect_ratio.split(":")
+        try:
+            target_ratio = float(aspect_parts[0]) / float(aspect_parts[1])
+        except (ValueError, IndexError, ZeroDivisionError):
+            target_ratio = 9.0 / 16.0
+
+        crop_w = min(source_w, int(round(source_h * target_ratio)))
+        crop_h = source_h
+        step = max(1, int(round(fps / max(0.5, sample_fps))))
+
+        logger.info(
+            f"[speaker] {source_w}x{source_h} {fps:.2f}fps {total_frames} frames "
+            f"step={step} crop={crop_w}x{crop_h}"
+        )
+
+        raw = []
+        frame_idx = 0
+        while True:
+            grabbed = cap.grab()
+            if not grabbed:
+                break
+            if frame_idx % step == 0:
+                ok, frame = cap.retrieve()
+                if not ok:
+                    break
+                faces = self.detect_faces_scored(frame)
+                dominant = self._pick_dominant_face(faces, source_w, source_h)
+                if dominant:
+                    fx, fy, fw, fh, score = dominant
+                    face_cx = fx + fw / 2.0
+                    face_cy = fy + fh / 2.0
+                    confidence = round(score, 3)
+                else:
+                    face_cx = source_w / 2.0
+                    face_cy = source_h / 2.0
+                    confidence = 0.0
+                raw.append(
+                    [frame_idx, frame_idx / fps, face_cx, face_cy,
+                     confidence, len(faces)]
+                )
+            frame_idx += 1
+
+        cap.release()
+
+        if video_path.startswith("http") and os.path.exists(resolved_path):
+            try:
+                os.remove(resolved_path)
+                logger.info(f"Cleaned up temporary file: {resolved_path}")
+            except Exception:
+                pass
+
+        # Gap-fill: hold the last confident face center across short detection
+        # gaps instead of snapping to frame center. Keeps the crop locked on the
+        # speaker when MediaPipe momentarily loses the face between samples.
+        hold_samples = max(1, int(round(2.0 * fps / step)))
+        center_default = source_w / 2.0
+        filled_centers = [center_default] * len(raw)
+        tracked_flags = [False] * len(raw)
+        last_valid_cx = None
+        last_valid_i = None
+        for i, r in enumerate(raw):
+            has_face = r[5] > 0 and r[4] >= 0.3
+            if has_face:
+                filled_centers[i] = r[2]
+                tracked_flags[i] = True
+                last_valid_cx = r[2]
+                last_valid_i = i
+            elif last_valid_cx is not None and (i - last_valid_i) <= hold_samples:
+                filled_centers[i] = last_valid_cx
+                tracked_flags[i] = True
+        # Back-fill the leading gap (before the first detection) so the clip
+        # opens already framed on the speaker rather than dead center.
+        first_valid = next((i for i, t in enumerate(tracked_flags) if t), None)
+        if first_valid:
+            for i in range(first_valid):
+                filled_centers[i] = filled_centers[first_valid]
+
+        centers = self._smooth_centers(filled_centers, smoothing_window)
+
+        crop_regions = []
+        max_x = max(0, source_w - crop_w)
+        for r, smooth_cx, tracked in zip(raw, centers, tracked_flags):
+            frame_no, timestamp, _cx, face_cy, confidence, num_faces = r
+            crop_x = int(round(min(max(smooth_cx - crop_w / 2.0, 0), max_x)))
+            crop_regions.append(
+                {
+                    "frame": frame_no,
+                    "timestamp": round(timestamp, 3),
+                    "x": crop_x,
+                    "y": 0,
+                    "width": crop_w,
+                    "height": crop_h,
+                    "face_cx": round(smooth_cx, 1),
+                    "face_cy": round(face_cy, 1),
+                    "num_faces": num_faces,
+                    "confidence": confidence,
+                    "tracked": tracked,
+                }
+            )
+
+        return {
+            "total_frames": total_frames,
+            "fps": fps,
+            "source_width": source_w,
+            "source_height": source_h,
+            "crop_width": crop_w,
+            "crop_height": crop_h,
+            "target_aspect_ratio": target_aspect_ratio,
+            "crop_regions": crop_regions,
+        }
+
     def generate_ffmpeg_command(
         self, video_path: str, crop_regions: List[Dict], output_path: str
     ) -> str:
@@ -475,6 +726,40 @@ async def crop_video(request: CropRequest):
 
     except Exception as e:
         logger.error(f"Crop analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/analyze_speaker", response_model=CropResponse)
+async def analyze_speaker(request: SpeakerCropRequest):
+    """Active-speaker-aware analysis returning a dynamic vertical crop timeline.
+
+    Unlike /analyze (which boxes all faces into one region), this locks onto the
+    dominant face per sample so the caller can pan the crop to follow the speaker.
+    """
+    try:
+        result = cropper.analyze_video_speaker(
+            video_path=request.video_path,
+            target_aspect_ratio=request.target_aspect_ratio,
+            sample_fps=request.sample_fps,
+            smoothing_window=request.smoothing_window,
+        )
+
+        return CropResponse(
+            success=True,
+            message=(
+                f"Speaker analysis complete: {len(result['crop_regions'])} "
+                f"samples over {result['total_frames']} frames"
+            ),
+            crop_regions=result["crop_regions"],
+            source_width=result["source_width"],
+            source_height=result["source_height"],
+            fps=result["fps"],
+            crop_width=result["crop_width"],
+            crop_height=result["crop_height"],
+        )
+
+    except Exception as e:
+        logger.error(f"Speaker analysis failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
