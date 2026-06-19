@@ -48,6 +48,12 @@ x-n8n: &service-n8n
     - N8N_TASK_BROKER_PORT=${N8N_TASK_BROKER_PORT}
     - NODE_FUNCTION_ALLOW_EXTERNAL=ajv,ajv-formats,puppeteer
     - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+    # nca-toolkit base URL: in-cluster endpoint to bypass Cloudflare for
+    # service-to-service calls. Workflows default to the public URL when unset.
+    - NCA_BASE_URL=${NCA_BASE_URL:-http://nca-toolkit:8080}
+    # Allow $env access in node expressions so workflows can read NCA_BASE_URL
+    # (n8n 2.x blocks $env in expressions by default). Single-operator instance.
+    - N8N_BLOCK_ENV_ACCESS_IN_NODE=${N8N_BLOCK_ENV_ACCESS_IN_NODE:-false}
     # n8n 2.x disables ExecuteCommand & LocalFileTrigger by default;
     # override with empty list to re-enable for existing workflows.
     - NODES_EXCLUDE=${NODES_EXCLUDE}
