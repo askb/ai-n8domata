@@ -54,6 +54,11 @@ x-n8n: &service-n8n
     # Allow $env access in node expressions so workflows can read NCA_BASE_URL
     # (n8n 2.x blocks $env in expressions by default). Single-operator instance.
     - N8N_BLOCK_ENV_ACCESS_IN_NODE=${N8N_BLOCK_ENV_ACCESS_IN_NODE:-false}
+    # ab-world-news pipeline secrets — workflows read these via $env so the repo
+    # JSONs carry no secrets and the sync-deploy can no longer clobber them.
+    - ABNEWS_DECISION_TOKEN=${ABNEWS_DECISION_TOKEN}
+    - ABNEWS_PUBLISH_TOKEN=${ABNEWS_PUBLISH_TOKEN}
+    - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
     # n8n 2.x disables ExecuteCommand & LocalFileTrigger by default;
     # override with empty list to re-enable for existing workflows.
     - NODES_EXCLUDE=${NODES_EXCLUDE}
