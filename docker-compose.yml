@@ -1,6 +1,7 @@
 # Only keep traefik volume since it still uses named volume
 volumes:
   traefik_data:
+  sadtalker_models:
 
 networks:
   n8n-network:
@@ -684,3 +685,49 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+
+  sadtalker:
+    build:
+      context: ./sadtalker
+      dockerfile: Dockerfile
+    container_name: sadtalker
+    restart: unless-stopped
+    profiles:
+      - core
+    networks:
+      - n8n-network
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "39"
+      - "105"
+    security_opt:
+      - seccomp:unconfined
+    ipc: host
+    environment:
+      - PYTHONUNBUFFERED=1
+      - HSA_OVERRIDE_GFX_VERSION=10.3.0
+      - SADTALKER_ROOT=/opt/SadTalker
+      - SADTALKER_MODEL_DIR=/models
+      - SADTALKER_WORK_DIR=/workspace
+      - SADTALKER_PREPROCESS=full
+      - SADTALKER_SIZE=256
+      - SADTALKER_STILL=true
+      - SADTALKER_TIMEOUT_SECONDS=900
+    volumes:
+      - sadtalker_models:/models
+    deploy:
+      resources:
+        limits:
+          memory: 12g
+          cpus: "6.0"
+        reservations:
+          memory: 2g
+          cpus: "1.0"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
