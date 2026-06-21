@@ -42,7 +42,9 @@ def health() -> JSONResponse:
 
 
 @app.post("/api/talk")
-async def talk(image: UploadFile = File(...), audio: UploadFile = File(...)) -> FileResponse:
+async def talk(
+    image: UploadFile = File(...), audio: UploadFile = File(...)
+) -> FileResponse:
     job_dir = WORK_DIR / str(uuid.uuid4())
     input_dir = job_dir / "input"
     result_dir = job_dir / "result"
@@ -103,7 +105,9 @@ async def talk(image: UploadFile = File(...), audio: UploadFile = File(...)) -> 
                 },
             )
 
-        mp4s = sorted(result_dir.rglob("*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True)
+        mp4s = sorted(
+            result_dir.rglob("*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True
+        )
         if not mp4s:
             raise HTTPException(
                 status_code=500,
@@ -124,7 +128,9 @@ async def talk(image: UploadFile = File(...), audio: UploadFile = File(...)) -> 
         raise
     except subprocess.TimeoutExpired as exc:
         _cleanup(job_dir)
-        raise HTTPException(status_code=504, detail=f"SadTalker timed out: {exc}") from exc
+        raise HTTPException(
+            status_code=504, detail=f"SadTalker timed out: {exc}"
+        ) from exc
     except Exception as exc:
         _cleanup(job_dir)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
