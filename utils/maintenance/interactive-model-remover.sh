@@ -94,9 +94,13 @@ show_file_details() {
     parent_dir=$(dirname "$file_path")
     echo "   Directory: $parent_dir"
     echo "   Other files in directory:"
+    # shellcheck disable=SC2012  # human-readable listing; ls is intentional here
     ls -lah "$parent_dir" | head -5 | sed 's/^/     /'
-    if [ $(ls "$parent_dir" | wc -l) -gt 5 ]; then
-        echo "     ... and $(($(ls "$parent_dir" | wc -l) - 5)) more files"
+    local file_count
+    # shellcheck disable=SC2012  # simple entry count; ls is sufficient here
+    file_count=$(ls "$parent_dir" | wc -l)
+    if [ "$file_count" -gt 5 ]; then
+        echo "     ... and $((file_count - 5)) more files"
     fi
 }
 
@@ -288,7 +292,7 @@ process_removal_candidates() {
         echo "  Deleted: $deleted | Kept: $kept | Skipped: $skipped | Backed up: $backed_up"
 
         # Ask if user wants to continue
-        if [ $processed -lt $total_candidates ]; then
+        if [ "$processed" -lt "$total_candidates" ]; then
             echo
             read -p "Continue to next file? (Y/n): " -n 1 -r
             echo

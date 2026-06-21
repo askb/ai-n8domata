@@ -28,7 +28,7 @@ dmesg | grep -i amdgpu | tail -10 || echo "No amdgpu messages in dmesg"
 echo ""
 
 echo "6. Checking available kernel modules for amdgpu:"
-find /lib/modules/$(uname -r) -name "*amdgpu*" 2>/dev/null || echo "No amdgpu kernel modules found"
+find "/lib/modules/$(uname -r)" -name "*amdgpu*" 2>/dev/null || echo "No amdgpu kernel modules found"
 echo ""
 
 echo "7. Checking if amdgpu module exists:"
@@ -42,7 +42,7 @@ echo ""
 echo "9. Checking GPU power state (if available):"
 for gpu in /sys/class/drm/card*/device/power_state; do
     if [ -f "$gpu" ]; then
-        echo "$(dirname $gpu): $(cat $gpu)"
+        echo "$(dirname "$gpu"): $(cat "$gpu")"
     fi
 done 2>/dev/null || echo "No GPU power state information available"
 echo ""
@@ -51,7 +51,7 @@ echo "10. Checking BIOS/UEFI GPU settings:"
 echo "GPU PCI configuration:"
 for device in $(lspci | grep -i amd | cut -d' ' -f1); do
     echo "Device $device:"
-    lspci -v -s $device | grep -E "(Subsystem|Kernel driver|Kernel modules)"
+    lspci -v -s "$device" | grep -E "(Subsystem|Kernel driver|Kernel modules)"
 done 2>/dev/null || echo "Could not read PCI configuration"
 echo ""
 
@@ -70,7 +70,7 @@ else
 fi
 
 # Check for kernel modules
-if find /lib/modules/$(uname -r) -name "*amdgpu*" | grep -q amdgpu; then
+if find "/lib/modules/$(uname -r)" -name "*amdgpu*" | grep -q amdgpu; then
     echo "✅ amdgpu kernel module is available"
 else
     echo "❌ amdgpu kernel module not found"

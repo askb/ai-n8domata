@@ -40,6 +40,7 @@ check_existing_setup() {
 
     echo
     echo "Current model directories:"
+    # shellcheck disable=SC2010  # human-readable filter for display; ls is intentional here
     ls -la | grep -E "(models|cog|wan)" || echo "None found"
 
     echo
@@ -221,7 +222,7 @@ backup_current_setup() {
         . 2>/dev/null || true
 
     if [ -f "$backup_file" ]; then
-        print_status "Backup created: $backup_file ($(du -sh $backup_file | cut -f1))"
+        print_status "Backup created: $backup_file ($(du -sh "$backup_file" | cut -f1))"
         print_warning "Models were NOT backed up due to size - they will remain in place"
     else
         print_error "Backup failed, but continuing with migration"
