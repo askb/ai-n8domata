@@ -15,6 +15,13 @@ DEFAULT_PREPROCESS = os.environ.get("SADTALKER_PREPROCESS", "full")
 DEFAULT_SIZE = os.environ.get("SADTALKER_SIZE", "256")
 DEFAULT_STILL = os.environ.get("SADTALKER_STILL", "true").lower() == "true"
 DEFAULT_ENHANCER = os.environ.get("SADTALKER_ENHANCER", "").strip()
+# facerender batch size — keep low (1) so the dense-motion conv3d fits in the
+# RX 6800M's 12GB even for longer audio (default SadTalker uses 2 -> ~9.4GB
+# allocation that OOMs on >~6s clips).
+DEFAULT_BATCH_SIZE = os.environ.get("SADTALKER_BATCH_SIZE", "1")
+# expression_scale amplifies mouth/expression motion (SadTalker default 1.0 is
+# subtle); >1 makes the talking more pronounced/visible.
+DEFAULT_EXPRESSION_SCALE = os.environ.get("SADTALKER_EXPRESSION_SCALE", "1.3")
 
 app = FastAPI(title="SadTalker Service", version="1.0.0")
 _gpu_lock = asyncio.Lock()
@@ -64,6 +71,10 @@ async def talk(image: UploadFile = File(...), audio: UploadFile = File(...)) -> 
             DEFAULT_PREPROCESS,
             "--size",
             DEFAULT_SIZE,
+            "--batch_size",
+            DEFAULT_BATCH_SIZE,
+            "--expression_scale",
+            DEFAULT_EXPRESSION_SCALE,
         ]
         if DEFAULT_STILL:
             cmd.append("--still")
