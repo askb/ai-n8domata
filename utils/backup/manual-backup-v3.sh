@@ -29,26 +29,25 @@ while true; do
   # Create SQL dump (much smaller than raw files)
   echo "Creating SQL dump..."
   if pg_dump -h postgres -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -f "${TEMP_DIR}/database.sql"; then
-    echo "SQL dump successful: $(du -sh ${TEMP_DIR}/database.sql | cut -f1)"
+    echo "SQL dump successful: $(du -sh "${TEMP_DIR}/database.sql" | cut -f1)"
 
     # Create manifest file
     echo "Backup created: $(date)" > "${TEMP_DIR}/backup-info.txt"
     echo "Database: ${POSTGRES_DB}" >> "${TEMP_DIR}/backup-info.txt"
-    echo "SQL dump size: $(du -sh ${TEMP_DIR}/database.sql | cut -f1)" >> "${TEMP_DIR}/backup-info.txt"
+    echo "SQL dump size: $(du -sh "${TEMP_DIR}/database.sql" | cut -f1)" >> "${TEMP_DIR}/backup-info.txt"
 
     # Count files being backed up
     N8N_WORKFLOWS=$(find /source/n8n-workflows -name "*.json" 2>/dev/null | wc -l || echo "0")
+    # shellcheck disable=SC2012  # simple entry count; ls is sufficient here
     N8N_CREDS=$(ls /source/n8n-credentials 2>/dev/null | wc -l || echo "0")
     echo "N8N Workflows: ${N8N_WORKFLOWS} files" >> "${TEMP_DIR}/backup-info.txt"
     echo "N8N Credentials: ${N8N_CREDS} files" >> "${TEMP_DIR}/backup-info.txt"
 
     # Create compressed archive with only essential files
     echo "Creating optimized archive..."
-    tar -czf "${FINAL_ARCHIVE}" \
+    if tar -czf "${FINAL_ARCHIVE}" \
       -C /source n8n-workflows n8n-credentials n8n-data \
-      -C "${TEMP_DIR}" database.sql backup-info.txt 2>/dev/null
-
-    if [ $? -eq 0 ]; then
+      -C "${TEMP_DIR}" database.sql backup-info.txt 2>/dev/null; then
       ARCHIVE_SIZE=$(du -sh "${FINAL_ARCHIVE}" | cut -f1)
       echo "✅ Backup completed successfully: ${ARCHIVE_SIZE}"
       echo "Archive: ${FINAL_ARCHIVE}"

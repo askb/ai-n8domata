@@ -103,6 +103,7 @@ safe_remove_directory() {
     echo "  Description: $description"
     echo "  Size: $(du -sh "$dir" 2>/dev/null | cut -f1 || echo 'Unknown')"
     echo "  Contents preview:"
+    # shellcheck disable=SC2012  # human-readable listing; ls is intentional here
     ls -la "$dir" 2>/dev/null | head -5 | sed 's/^/    /'
     echo
 

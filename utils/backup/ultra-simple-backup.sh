@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # Load environment variables
+# shellcheck source=/dev/null
 source .env 2>/dev/null || echo "Warning: .env file not found"
 
 echo "=== N8N Ultra-Simple Backup Started at $(date) ==="
@@ -31,7 +32,7 @@ echo "🚀 Starting services..."
 echo "💾 Creating database dump..."
 DB_DUMP="${BACKUP_DIR}/n8n-backup-${BACKUP_DATE}.sql"
 
-if docker exec $(docker compose ps -q postgres) bash -c "PGPASSWORD='${DB_PASSWORD}' pg_dump -U postgres -d n8n" > "${DB_DUMP}"; then
+if docker exec "$(docker compose ps -q postgres)" bash -c "PGPASSWORD='${DB_PASSWORD}' pg_dump -U postgres -d n8n" > "${DB_DUMP}"; then
     DB_SIZE=$(du -sh "${DB_DUMP}" | cut -f1)
     echo "✅ Database dump created: ${DB_SIZE}"
     echo "📁 Location: ${DB_DUMP}"
@@ -42,8 +43,8 @@ fi
 
 # Get quick stats
 echo "📊 Database contains:"
-docker exec $(docker compose ps -q postgres) bash -c "PGPASSWORD='${DB_PASSWORD}' psql -U postgres -d n8n -t -c 'SELECT COUNT(*) FROM workflow_entity;'" | xargs echo "Workflows:"
-docker exec $(docker compose ps -q postgres) bash -c "PGPASSWORD='${DB_PASSWORD}' psql -U postgres -d n8n -t -c 'SELECT COUNT(*) FROM credentials_entity;'" | xargs echo "Credentials:"
+docker exec "$(docker compose ps -q postgres)" bash -c "PGPASSWORD='${DB_PASSWORD}' psql -U postgres -d n8n -t -c 'SELECT COUNT(*) FROM workflow_entity;'" | xargs echo "Workflows:"
+docker exec "$(docker compose ps -q postgres)" bash -c "PGPASSWORD='${DB_PASSWORD}' psql -U postgres -d n8n -t -c 'SELECT COUNT(*) FROM credentials_entity;'" | xargs echo "Credentials:"
 
 echo ""
 echo "=== Backup Completed Successfully ==="

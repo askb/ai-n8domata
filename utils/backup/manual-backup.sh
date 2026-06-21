@@ -30,6 +30,7 @@ load_env() {
         log_info "Loading environment variables from .env..."
         # Export variables, filtering out comments and empty lines
         set -a
+        # shellcheck source=/dev/null
         source <(grep -v '^#' .env | grep -v '^[[:space:]]*$' | sed 's/#.*$//')
         set +a
         log_info "Environment loaded successfully"
@@ -67,7 +68,7 @@ create_directories() {
 test_database() {
     log_info "Testing database connection..."
 
-    if docker exec $(docker compose ps -q postgres) bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c 'SELECT version();'" > /dev/null 2>&1; then
+    if docker exec "$(docker compose ps -q postgres)" bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c 'SELECT version();'" > /dev/null 2>&1; then
         log_info "Database connection successful"
     else
         log_error "Cannot connect to database!"
@@ -81,7 +82,7 @@ create_database_dump() {
 
     DUMP_FILE="${TEMP_DIR}/database.sql"
 
-    if docker exec $(docker compose ps -q postgres) bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' pg_dump -U ${POSTGRES_USER} -d ${POSTGRES_DB}" > "${DUMP_FILE}"; then
+    if docker exec "$(docker compose ps -q postgres)" bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' pg_dump -U ${POSTGRES_USER} -d ${POSTGRES_DB}" > "${DUMP_FILE}"; then
         DUMP_SIZE=$(du -sh "${DUMP_FILE}" | cut -f1)
         log_info "Database dump created successfully: ${DUMP_SIZE}"
     else
@@ -104,10 +105,12 @@ Database: ${POSTGRES_DB}
 EOF
 
     # Get counts of main entities
-    docker exec $(docker compose ps -q postgres) bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c 'SELECT COUNT(*) as workflows FROM workflow_entity;'" >> "${STATS_FILE}"
-    docker exec $(docker compose ps -q postgres) bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c 'SELECT COUNT(*) as credentials FROM credentials_entity;'" >> "${STATS_FILE}"
-    docker exec $(docker compose ps -q postgres) bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c 'SELECT COUNT(*) as executions FROM execution_entity;'" >> "${STATS_FILE}"
-    docker exec $(docker compose ps -q postgres) bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c 'SELECT COUNT(*) as users FROM \"user\";'" >> "${STATS_FILE}"
+    {
+        docker exec "$(docker compose ps -q postgres)" bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c 'SELECT COUNT(*) as workflows FROM workflow_entity;'"
+        docker exec "$(docker compose ps -q postgres)" bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c 'SELECT COUNT(*) as credentials FROM credentials_entity;'"
+        docker exec "$(docker compose ps -q postgres)" bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c 'SELECT COUNT(*) as executions FROM execution_entity;'"
+        docker exec "$(docker compose ps -q postgres)" bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c 'SELECT COUNT(*) as users FROM \"user\";'"
+    } >> "${STATS_FILE}"
 
     log_info "Database statistics saved"
 }
@@ -133,7 +136,7 @@ copy_n8n_files() {
         if [ "$REDIS_SIZE" -lt 10000000 ]; then  # Less than 10MB
             mkdir -p "${TEMP_DIR}/redis"
             cp "./backups/redis/dump.rdb" "${TEMP_DIR}/redis/"
-            log_info "Copied Redis dump: $(du -sh ${TEMP_DIR}/redis/dump.rdb | cut -f1)"
+            log_info "Copied Redis dump: $(du -sh "${TEMP_DIR}/redis/dump.rdb" | cut -f1)"
         else
             log_warn "Redis dump too large ($(du -sh ./backups/redis/dump.rdb | cut -f1)), skipping"
         fi
@@ -158,11 +161,12 @@ Contents:
 EOF
 
     # List all files in backup
-    find "${TEMP_DIR}" -type f -exec basename {} \; | sort >> "${MANIFEST_FILE}"
-
-    echo "" >> "${MANIFEST_FILE}"
-    echo "File Sizes:" >> "${MANIFEST_FILE}"
-    du -sh "${TEMP_DIR}"/* >> "${MANIFEST_FILE}"
+    {
+        find "${TEMP_DIR}" -type f -exec basename {} \; | sort
+        echo ""
+        echo "File Sizes:"
+        du -sh "${TEMP_DIR}"/*
+    } >> "${MANIFEST_FILE}"
 
     log_info "Backup manifest created"
 }
@@ -171,7 +175,7 @@ EOF
 create_archive() {
     log_info "Creating compressed archive..."
 
-    if tar -czf "${FINAL_ARCHIVE}" -C "$(dirname ${TEMP_DIR})" "$(basename ${TEMP_DIR})"; then
+    if tar -czf "${FINAL_ARCHIVE}" -C "$(dirname "${TEMP_DIR}")" "$(basename "${TEMP_DIR}")"; then
         ARCHIVE_SIZE=$(du -sh "${FINAL_ARCHIVE}" | cut -f1)
         log_info "Archive created successfully: ${ARCHIVE_SIZE}"
         log_info "Archive location: ${FINAL_ARCHIVE}"
@@ -199,7 +203,7 @@ verify_backup() {
         echo "=== Backup Contents ==="
         tar -tzf "${FINAL_ARCHIVE}" | head -20
 
-        if [ $(tar -tzf "${FINAL_ARCHIVE}" | wc -l) -gt 20 ]; then
+        if [ "$(tar -tzf "${FINAL_ARCHIVE}" | wc -l)" -gt 20 ]; then
             echo "... and $(( $(tar -tzf "${FINAL_ARCHIVE}" | wc -l) - 20 )) more files"
         fi
     else

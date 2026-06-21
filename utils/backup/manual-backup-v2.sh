@@ -19,6 +19,7 @@ mkdir -p "$BACKUP_DIR"
 if [ -f .env ]; then
     # Better way to load env file, avoiding comments and empty lines
     set -a  # automatically export all variables
+    # shellcheck source=/dev/null
     source <(grep -v '^#' .env | grep -v '^[[:space:]]*$')
     set +a  # disable automatic export
 fi
@@ -26,7 +27,7 @@ fi
 echo "Creating database dump..."
 # Create temporary dump
 TEMP_DUMP="/tmp/n8n-dump-$BACKUP_DATE.sql"
-docker exec $(docker-compose ps -q postgres) pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" > "$TEMP_DUMP"
+docker exec "$(docker-compose ps -q postgres)" pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" > "$TEMP_DUMP"
 
 echo "Creating archive..."
 # Create archive with all data

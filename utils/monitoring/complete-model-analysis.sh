@@ -1,7 +1,11 @@
 #!/bin/bash
 # complete-model-analysis.sh
 # Combines filesystem analysis with Docker log analysis for complete picture
-
+#
+# The size counters in the "SAFE TO REMOVE" / "RECOMMENDED TO KEEP" loops are
+# tallied inside `find | while` subshell pipelines, so their values are
+# intentionally informational only and do not persist past the loops.
+# shellcheck disable=SC2030,SC2031
 set -e
 
 # shellcheck disable=SC2034

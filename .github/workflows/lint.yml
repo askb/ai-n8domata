@@ -47,18 +47,23 @@ jobs:
 
   dockerfile-lint:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dockerfile:
+          - Dockerfile
+          - queue-metrics/Dockerfile.queue-metrics
+          - dynamic-scaler/Dockerfile.dynamic-scaler
+          - cropper/Dockerfile
+          - nca-toolkit/Dockerfile
     steps:
     - uses: actions/checkout@v4
 
     - name: Run Hadolint
       uses: hadolint/hadolint-action@v3.1.0
       with:
-        dockerfile: |
-          Dockerfile
-          queue-metrics/Dockerfile.queue-metrics
-          dynamic-scaler/Dockerfile.dynamic-scaler
-          cropper/Dockerfile
-          nca-toolkit/Dockerfile
+        dockerfile: ${{ matrix.dockerfile }}
+        config: .hadolint.yaml
         failure-threshold: warning
 
   yaml-lint:

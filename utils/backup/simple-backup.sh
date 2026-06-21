@@ -13,6 +13,7 @@ FINAL_ARCHIVE="${BACKUP_DIR}/n8n-backup-${BACKUP_DATE}.tar.gz"
 # Load environment (safe method)
 if [ -f .env ]; then
     set -a  # automatically export all variables
+    # shellcheck source=/dev/null
     source <(grep -v '^#' .env | grep -v '^[[:space:]]*$')
     set +a  # disable automatic export
 else
@@ -34,7 +35,7 @@ fi
 
 # Test database connection
 echo "🔍 Testing database connection..."
-if ! docker exec $(docker compose ps -q postgres) bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c 'SELECT 1;'" > /dev/null 2>&1; then
+if ! docker exec "$(docker compose ps -q postgres)" bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c 'SELECT 1;'" > /dev/null 2>&1; then
     echo "❌ Cannot connect to database!"
     exit 1
 fi
@@ -43,7 +44,7 @@ echo "✅ Database connection successful"
 # Create database dump
 echo "💾 Creating database dump..."
 DB_DUMP="${BACKUP_DIR}/database-${BACKUP_DATE}.sql"
-if docker exec $(docker compose ps -q postgres) bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' pg_dump -U ${POSTGRES_USER} -d ${POSTGRES_DB}" > "${DB_DUMP}"; then
+if docker exec "$(docker compose ps -q postgres)" bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' pg_dump -U ${POSTGRES_USER} -d ${POSTGRES_DB}" > "${DB_DUMP}"; then
     DB_SIZE=$(du -sh "${DB_DUMP}" | cut -f1)
     echo "✅ Database dump created: ${DB_SIZE}"
 else
@@ -54,23 +55,24 @@ fi
 # Get database stats
 echo "📊 Getting database statistics..."
 STATS_FILE="${BACKUP_DIR}/stats-${BACKUP_DATE}.txt"
-echo "N8N Database Statistics - $(date)" > "${STATS_FILE}"
-echo "======================================" >> "${STATS_FILE}"
-
-docker exec $(docker compose ps -q postgres) bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c 'SELECT COUNT(*) as workflows FROM workflow_entity;'" >> "${STATS_FILE}"
-docker exec $(docker compose ps -q postgres) bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c 'SELECT COUNT(*) as credentials FROM credentials_entity;'" >> "${STATS_FILE}"
-docker exec $(docker compose ps -q postgres) bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c 'SELECT COUNT(*) as executions FROM execution_entity;'" >> "${STATS_FILE}"
-docker exec $(docker compose ps -q postgres) bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c 'SELECT COUNT(*) as users FROM \"user\";'" >> "${STATS_FILE}"
+{
+    echo "N8N Database Statistics - $(date)"
+    echo "======================================"
+    docker exec "$(docker compose ps -q postgres)" bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c 'SELECT COUNT(*) as workflows FROM workflow_entity;'"
+    docker exec "$(docker compose ps -q postgres)" bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c 'SELECT COUNT(*) as credentials FROM credentials_entity;'"
+    docker exec "$(docker compose ps -q postgres)" bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c 'SELECT COUNT(*) as executions FROM execution_entity;'"
+    docker exec "$(docker compose ps -q postgres)" bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c 'SELECT COUNT(*) as users FROM \"user\";'"
+} > "${STATS_FILE}"
 
 echo "✅ Statistics saved"
 
 # Create archive with database dump + n8n files + stats
 echo "📦 Creating backup archive..."
 tar -czf "${FINAL_ARCHIVE}" \
-  -C "${BACKUP_DIR}" "$(basename ${DB_DUMP})" "$(basename ${STATS_FILE})" \
+  -C "${BACKUP_DIR}" "$(basename "${DB_DUMP}")" "$(basename "${STATS_FILE}")" \
   -C . backups/n8n-data backups/n8n-workflows backups/n8n-credentials 2>/dev/null || \
 tar -czf "${FINAL_ARCHIVE}" \
-  -C "${BACKUP_DIR}" "$(basename ${DB_DUMP})" "$(basename ${STATS_FILE})" 2>/dev/null
+  -C "${BACKUP_DIR}" "$(basename "${DB_DUMP}")" "$(basename "${STATS_FILE}")" 2>/dev/null
 
 if [ -f "${FINAL_ARCHIVE}" ]; then
     ARCHIVE_SIZE=$(du -sh "${FINAL_ARCHIVE}" | cut -f1)
