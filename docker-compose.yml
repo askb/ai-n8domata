@@ -52,6 +52,13 @@ x-n8n: &service-n8n
     # nca-toolkit base URL: in-cluster endpoint to bypass Cloudflare for
     # service-to-service calls. Workflows default to the public URL when unset.
     - NCA_BASE_URL=${NCA_BASE_URL:-http://nca-toolkit:8080}
+    # Avatar (talking-head) backend — flip the lip-sync engine WITHOUT editing
+    # workflows (the Generate Avatar node reads $env.AVATAR_API_URL). Default is
+    # wav2lip (fast, handles full-length VO). For SadTalker (much better
+    # lip-sync but ~12-20x realtime, slow on long VO) set in .env:
+    #   AVATAR_API_URL=http://sadtalker:7860/api/talk
+    # then: docker compose up -d n8n n8n-worker n8n-webhook
+    - AVATAR_API_URL=${AVATAR_API_URL:-http://wav2lip_app:8000/api/lipsync}
     # Allow $env access in node expressions so workflows can read NCA_BASE_URL
     # (n8n 2.x blocks $env in expressions by default). Single-operator instance.
     - N8N_BLOCK_ENV_ACCESS_IN_NODE=${N8N_BLOCK_ENV_ACCESS_IN_NODE:-false}
