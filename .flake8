@@ -1,0 +1,7 @@
+[flake8]
+# Black owns line length (88); the only >88 lines are inside string
+# literals that black intentionally does not wrap. Ignore E203/W503 for
+# black compatibility.
+max-line-length = 88
+extend-ignore = E203, W503, E501
+exclude = .git,__pycache__,.venv,venv,node_modules
