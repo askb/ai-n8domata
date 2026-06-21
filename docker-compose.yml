@@ -592,6 +592,9 @@ services:
           cpus: "1.0"
     environment:
       API_KEY: ${NCAT_API_KEY}
+      # Render parallelism: gunicorn sync workers (was default 2). 4 fits the
+      # 10-CPU cap above (~2.5 cores per concurrent ffmpeg job).
+      GUNICORN_WORKERS: ${NCA_GUNICORN_WORKERS:-4}
       S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
       S3_SECRET_KEY: ${S3_SECRET_KEY}
