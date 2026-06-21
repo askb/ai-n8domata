@@ -35,7 +35,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Chromium browser
-RUN apt-get update && apt-get install -y chromium && \
+RUN apt-get update && apt-get install -y --no-install-recommends chromium && \
     rm -rf /var/lib/apt/lists/*
 
 # Install n8n and Puppeteer
