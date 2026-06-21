@@ -714,6 +714,7 @@ services:
       - SADTALKER_PREPROCESS=full
       - SADTALKER_SIZE=256
       - SADTALKER_STILL=true
+      - SADTALKER_BATCH_SIZE=1
       - SADTALKER_TIMEOUT_SECONDS=900
     volumes:
       - sadtalker_models:/models
