@@ -28,7 +28,6 @@ version-resolver:
     labels: ["patch", "fix", "bugfix", "chore", "ci", "docs"]
   default: patch
 
-
 template: |
   ## Changes
 
