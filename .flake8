@@ -4,4 +4,4 @@
 # black compatibility.
 max-line-length = 88
 extend-ignore = E203, W503, E501
-exclude = .git,__pycache__,.venv,venv,node_modules
+exclude = .git,__pycache__,.venv,venv,node_modules,sadtalker/make_animation.patched.py

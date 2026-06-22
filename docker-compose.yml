@@ -718,13 +718,16 @@ services:
       - SADTALKER_ROOT=/opt/SadTalker
       - SADTALKER_MODEL_DIR=/models
       - SADTALKER_WORK_DIR=/workspace
-      - SADTALKER_PREPROCESS=full
+      - SADTALKER_PREPROCESS=crop
       - SADTALKER_SIZE=256
       - SADTALKER_STILL=true
       - SADTALKER_BATCH_SIZE=1
       - SADTALKER_TIMEOUT_SECONDS=900
     volumes:
       - sadtalker_models:/models
+      # Persisted patch: face-renderer offloads each frame to CPU so it
+      # doesn't accumulate all frames in VRAM and OOM at ~85% on ~30s clips.
+      - ./sadtalker/make_animation.patched.py:/opt/SadTalker/src/facerender/modules/make_animation.py:ro
     deploy:
       resources:
         limits:
