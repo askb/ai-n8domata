@@ -3,13 +3,10 @@
 ---
 name: Draft Release
 
-# Drafts/updates a GitHub release from merged PRs, and auto-labels PRs by their
-# conventional-commit title so the notes are categorised.
+# Drafts/updates a GitHub release from merged PRs on every push to main.
 on:
   push:
-    branches: [main]
-  pull_request:
-    types: [opened, reopened, synchronize]
+    branches: [master]
 
 permissions:
   contents: read

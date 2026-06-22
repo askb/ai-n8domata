@@ -28,17 +28,6 @@ version-resolver:
     labels: ["patch", "fix", "bugfix", "chore", "ci", "docs"]
   default: patch
 
-autolabeler:
-  - label: "feature"
-    title: ["/^feat(\\(.+\\))?!?:/"]
-  - label: "fix"
-    title: ["/^fix(\\(.+\\))?!?:/"]
-  - label: "documentation"
-    title: ["/^docs(\\(.+\\))?!?:/"]
-  - label: "ci"
-    title: ["/^(ci|build)(\\(.+\\))?!?:/"]
-  - label: "chore"
-    title: ["/^(chore|refactor|test|style|perf)(\\(.+\\))?!?:/"]
 
 template: |
   ## Changes
