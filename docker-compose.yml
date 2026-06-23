@@ -20,7 +20,7 @@ x-n8n: &service-n8n
   environment:
     - N8N_DIAGNOSTICS_ENABLED=${N8N_DIAGNOSTICS_ENABLED}
     - N8N_USER_FOLDER=${N8N_USER_FOLDER}
-    - N8N_SECURE_COOKIE=${N8N_SECURE_COOKIE}
+    - N8N_SECURE_COOKIE=${N8N_SECURE_COOKIE:-true}
     - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=${N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS}
     - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
     - N8N_HOST=${N8N_HOST}
@@ -75,7 +75,7 @@ x-n8n: &service-n8n
     - N8N_BINARY_DATA_TTL=1440
     - N8N_BINARY_DATA_STORAGE_PATH=/home/node/.n8n/binaryData
     # Push notification configuration for better connection stability
-    - N8N_SECURE_COOKIE=${N8N_SECURE_COOKIE}
+    - N8N_SECURE_COOKIE=${N8N_SECURE_COOKIE:-true}
     # WebSocket and connectivity configuration
     - N8N_DISABLE_UI=false
     - N8N_EDITOR_ENABLE_WEBHOOKS=true
@@ -119,10 +119,10 @@ services:
       - "--accesslog=true"
       - "--log.level=INFO"
     ports:
-      - "80:80"           # Only HTTP needed for Cloudflare Tunnel
-      - "8082:8082"       # N8N UI
-      - "8083:8083"       # N8N webhooks
-      - "8081:8080"       # Traefik dashboard
+      - "127.0.0.1:80:80"     # localhost-only; Cloudflare tunnel reaches traefik via docker net
+      - "127.0.0.1:8082:8082" # N8N UI (localhost-only; access via https Cloudflare URL)
+      - "127.0.0.1:8083:8083" # N8N webhooks (localhost-only)
+      - "127.0.0.1:8081:8080" # Traefik dashboard (localhost-only)
     volumes:
       - traefik_data:/letsencrypt
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -191,8 +191,8 @@ services:
         reservations:
           memory: 512m
     ports:
-      - "5678:5678"
-      - "5679:5679"
+      - "127.0.0.1:5678:5678"
+      - "127.0.0.1:5679:5679"
     volumes:
       - ./backups/n8n-data:/n8n
       - ./backups/n8n-workflows:/home/node/.n8n/workflows
