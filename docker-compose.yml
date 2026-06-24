@@ -67,6 +67,9 @@ x-n8n: &service-n8n
     - ABNEWS_DECISION_TOKEN=${ABNEWS_DECISION_TOKEN}
     - ABNEWS_PUBLISH_TOKEN=${ABNEWS_PUBLISH_TOKEN}
     - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+    # whats-this-repo free-guide link (cloaked short link). Read via $env by the
+    # publish handler (video description) and the comment auto-reply workflow.
+    - WTR_GUIDE_URL=${WTR_GUIDE_URL:-}
     # n8n 2.x disables ExecuteCommand & LocalFileTrigger by default;
     # override with empty list to re-enable for existing workflows.
     - NODES_EXCLUDE=${NODES_EXCLUDE}
