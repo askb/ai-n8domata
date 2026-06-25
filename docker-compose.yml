@@ -75,6 +75,7 @@ x-n8n: &service-n8n
     # be clobbered on workflow re-import. The Diffusions + WTR IG/FB nodes use these.
     - DIFFUSIONS_PAGE_TOKEN=${DIFFUSIONS_PAGE_TOKEN:-}
     - WTR_PAGE_TOKEN=${WTR_PAGE_TOKEN:-}
+    - GITHUB_TOKEN=${GITHUB_TOKEN:-}
     # n8n 2.x disables ExecuteCommand & LocalFileTrigger by default;
     # override with empty list to re-enable for existing workflows.
     - NODES_EXCLUDE=${NODES_EXCLUDE}
