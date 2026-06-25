@@ -311,6 +311,13 @@ WTR_GUIDE_URL=https://tinyurl.com/whatzthisrepo
 # (~/scripts/diffusions-backfill.sh -> systemd user timer `diffusions-backfill`).
 # Read directly from .env by the wrapper; NOT injected into the n8n container.
 BASEROW_API_TOKEN=
+
+# WTR paced auto-dispatcher (host-side ~/scripts/wtr-dispatcher.sh -> systemd
+# user timer `wtr-dispatcher`, ~every 90 min). Drains the WTR 'Approved' backlog
+# in Baserow 751 at WTR_DAILY_GEN_LIMIT/day so it never starves the GPU shared
+# with LF2SH. Read from .env by the wrapper; NOT injected into the n8n container.
+WTR_GEN_WEBHOOK=            # WTR generator webhook URL
+WTR_DAILY_GEN_LIMIT=8       # max generations to start per day (default 8)
 ```
 
 > The IG/FB nodes reference these as `{{$env.DIFFUSIONS_PAGE_TOKEN}}` /
