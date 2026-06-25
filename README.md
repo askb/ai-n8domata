@@ -286,6 +286,38 @@ WEBUI_PORT=7860                   # Web interface port
 CPU_THREADS=4                     # CPU thread utilization
 ```
 
+### Content-Automation Publishing (WTR + The Diffusions)
+
+Meta (Facebook/Instagram) page tokens and CTA links for the social-publishing
+workflows. Tokens live in `.env` as the **single source of truth** (passed into
+n8n via `docker-compose.yml`) rather than in n8n credentials — so they survive
+workflow re-imports and rotate in one place. The page tokens are non-expiring;
+they only break for Meta-side reasons (app/account flagged), never on an n8n
+restart.
+
+```bash
+# Meta long-lived PAGE access tokens (Graph API page-token chain):
+#   user token -> long-lived user token -> GET /me/accounts -> page access_token
+DIFFUSIONS_PAGE_TOKEN=            # The Diffusions  (LF2SH approved-upload-youtube.json)
+                                  #   page 1206440389218995 / IG @the_diffusions
+WTR_PAGE_TOKEN=                   # What's This Repo (5-publish-handler.json)
+                                  #   page 1230772620115412 / IG @whatzthisrepo
+
+# Cloaked CTA "free guide" link (301 -> Gumroad) appended to WTR descriptions
+# and the YouTube comment auto-reply
+WTR_GUIDE_URL=https://tinyurl.com/whatzthisrepo
+
+# Baserow API token for the HOST-side daily IG/FB backfill cron
+# (~/scripts/diffusions-backfill.sh -> systemd user timer `diffusions-backfill`).
+# Read directly from .env by the wrapper; NOT injected into the n8n container.
+BASEROW_API_TOKEN=
+```
+
+> The IG/FB nodes reference these as `{{$env.DIFFUSIONS_PAGE_TOKEN}}` /
+> `{{$env.WTR_PAGE_TOKEN}}`. After editing token values, recreate n8n so the new
+> env is loaded: `docker compose up -d n8n-main n8n-worker n8n-webhook`
+> (a plain `restart` will **not** pick up changed env values).
+
 ## 📊 Monitoring and Observability
 
 ### Queue Metrics Monitor
