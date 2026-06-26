@@ -456,7 +456,7 @@ services:
     networks:
       - n8n-network
     ports:
-      - "8008:8000"
+      - "127.0.0.1:8008:8000"
     environment:
       # Basic configuration
       - LOG_LEVEL=error
@@ -506,8 +506,8 @@ services:
     networks:
       - n8n-network
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     volumes:
       - ./data/minio:/data
     environment:
@@ -534,7 +534,7 @@ services:
     networks:
       - n8n-network
     ports:
-      - "8880:8880"
+      - "127.0.0.1:8880:8880"
     deploy:
       resources:
         limits:
@@ -566,8 +566,8 @@ services:
     networks:
       - n8n-network
     ports:
-      - "85:80"
-      - "443:443"
+      - "127.0.0.1:85:80"
+      - "127.0.0.1:443:443"
     volumes:
       - ./data/baserow:/baserow/data
     shm_size: 256mb
@@ -598,7 +598,7 @@ services:
     networks:
       - n8n-network
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     deploy:
       resources:
         limits:
@@ -637,7 +637,7 @@ services:
     networks:
       - n8n-network
     ports:
-      - "8888:8888"
+      - "127.0.0.1:8888:8888"
     deploy:
       resources:
         limits:
