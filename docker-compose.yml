@@ -59,6 +59,9 @@ x-n8n: &service-n8n
     #   AVATAR_API_URL=http://sadtalker:7860/api/talk
     # then: docker compose up -d n8n n8n-worker n8n-webhook
     - AVATAR_API_URL=${AVATAR_API_URL:-http://wav2lip_app:8000/api/lipsync}
+    # Master avatar on/off switch (the compose-video node reads $env.USE_AVATAR).
+    # Set USE_AVATAR=false in .env to render WTR shorts WITHOUT the talking-head.
+    - USE_AVATAR=${USE_AVATAR:-true}
     # Allow $env access in node expressions so workflows can read NCA_BASE_URL
     # (n8n 2.x blocks $env in expressions by default). Single-operator instance.
     - N8N_BLOCK_ENV_ACCESS_IN_NODE=${N8N_BLOCK_ENV_ACCESS_IN_NODE:-false}
