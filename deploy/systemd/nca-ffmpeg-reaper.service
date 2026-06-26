@@ -1,0 +1,7 @@
+[Unit]
+Description=Reap orphaned/runaway ffmpeg in the nca-toolkit container
+Documentation=https://github.com/askb/ai-n8domata/blob/master/deploy/systemd/README.md
+
+[Service]
+Type=oneshot
+ExecStart=/home/abelur/scripts/nca-ffmpeg-reaper.sh
