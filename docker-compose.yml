@@ -67,6 +67,15 @@ x-n8n: &service-n8n
     - ABNEWS_DECISION_TOKEN=${ABNEWS_DECISION_TOKEN}
     - ABNEWS_PUBLISH_TOKEN=${ABNEWS_PUBLISH_TOKEN}
     - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+    # whats-this-repo free-guide link (cloaked short link). Read via $env by the
+    # publish handler (video description) and the comment auto-reply workflow.
+    - WTR_GUIDE_URL=${WTR_GUIDE_URL:-}
+    # Meta (Facebook Page / Instagram) non-expiring Page tokens, read via $env so
+    # they live in .env (one place to update) instead of n8n credentials that can
+    # be clobbered on workflow re-import. The Diffusions + WTR IG/FB nodes use these.
+    - DIFFUSIONS_PAGE_TOKEN=${DIFFUSIONS_PAGE_TOKEN:-}
+    - WTR_PAGE_TOKEN=${WTR_PAGE_TOKEN:-}
+    - GITHUB_TOKEN=${GITHUB_TOKEN:-}
     # n8n 2.x disables ExecuteCommand & LocalFileTrigger by default;
     # override with empty list to re-enable for existing workflows.
     - NODES_EXCLUDE=${NODES_EXCLUDE}
@@ -593,16 +602,17 @@ services:
     deploy:
       resources:
         limits:
-          memory: 6g
+          memory: 12g
           cpus: "10.0"
         reservations:
           memory: 256m
           cpus: "1.0"
     environment:
       API_KEY: ${NCAT_API_KEY}
-      # Render parallelism: gunicorn sync workers (was default 2). 4 fits the
-      # 10-CPU cap above (~2.5 cores per concurrent ffmpeg job).
-      GUNICORN_WORKERS: ${NCA_GUNICORN_WORKERS:-4}
+      # Render parallelism: gunicorn sync workers. Lowered 4->3 and raised the
+      # memory cap 6g->12g to stop OOM-kills (SIGKILL) on long/large source
+      # videos that were failing the LF2SH v2.5 generator since ~2026-06-23.
+      GUNICORN_WORKERS: ${NCA_GUNICORN_WORKERS:-3}
       S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
       S3_SECRET_KEY: ${S3_SECRET_KEY}
