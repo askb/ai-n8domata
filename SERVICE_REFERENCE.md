@@ -339,43 +339,9 @@ Complete reference for all services in the N8N AI Services Platform.
 
 ## 📊 Service Dependencies
 
-```mermaid
-graph TB
-    subgraph "External"
-        CF[Cloudflare] --> TR[Traefik]
-    end
-    
-    subgraph "Core Data"
-        PG[PostgreSQL]
-        RD[Redis]
-    end
-    
-    subgraph "N8N Core"
-        N8N[N8N Main] --> PG
-        N8N --> RD
-        NW[N8N Workers] --> PG
-        NW --> RD
-        NH[N8N Webhooks] --> PG
-    end
-    
-    subgraph "Monitoring"
-        QM[Queue Metrics] --> RD
-        DS[Dynamic Scaler] --> RD
-        DS --> NW
-    end
-    
-    subgraph "AI Services"
-        AIA[AI Agents]
-        SVM[Video Maker]
-        SD[Stable Diffusion]
-    end
-    
-    TR --> N8N
-    TR --> NH
-    TR --> AIA
-    TR --> SVM
-    TR --> SD
-```
+![AI-n8domata service topology](docs/diagrams/service-reference.svg)
+
+> Rendered from [`docs/diagrams/service-reference.mmd`](docs/diagrams/service-reference.mmd) — regenerate with [`docs/diagrams/render.sh`](docs/diagrams/render.sh).
 
 ## 🔧 Service Configuration Patterns
 

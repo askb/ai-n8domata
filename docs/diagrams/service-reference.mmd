@@ -1,0 +1,50 @@
+---
+title: AI-n8domata — Service Topology
+---
+graph TB
+    subgraph EXT["🌐 External"]
+        CF[Cloudflare] --> TR[Traefik]
+    end
+
+    subgraph DATA["🗄️ Core Data"]
+        PG[(PostgreSQL)]
+        RD[(Redis)]
+    end
+
+    subgraph CORE["⚙️ N8N Core"]
+        N8N[N8N Main] --> PG
+        N8N --> RD
+        NW[N8N Workers] --> PG
+        NW --> RD
+        NH[N8N Webhooks] --> PG
+    end
+
+    subgraph MON["📊 Monitoring"]
+        QM[Queue Metrics] --> RD
+        DS[Dynamic Scaler] --> RD
+        DS --> NW
+    end
+
+    subgraph AI["🤖 AI Services"]
+        AIA[AI Agents]
+        SVM[Video Maker]
+        SD[Stable Diffusion]
+    end
+
+    TR --> N8N
+    TR --> NH
+    TR --> AIA
+    TR --> SVM
+    TR --> SD
+
+    classDef ext fill:#1f6feb,stroke:#0b3d91,color:#fff,stroke-width:1px
+    classDef core fill:#ea4b71,stroke:#9e2150,color:#fff,stroke-width:1px
+    classDef data fill:#2da44e,stroke:#136229,color:#fff,stroke-width:1px
+    classDef ai fill:#8957e5,stroke:#532ba9,color:#fff,stroke-width:1px
+    classDef mon fill:#0598bc,stroke:#04566b,color:#fff,stroke-width:1px
+
+    class CF,TR ext
+    class N8N,NW,NH core
+    class PG,RD data
+    class AIA,SVM,SD ai
+    class QM,DS mon
