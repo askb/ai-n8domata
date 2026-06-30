@@ -2,66 +2,84 @@
 title: AI-n8domata — Platform Architecture
 ---
 graph TB
-    subgraph EXT["🌐 External Access"]
-        CF[Cloudflare Tunnel]
-        TR[Traefik Reverse Proxy]
+    subgraph EDGE["🌐 Edge &amp; Ingress"]
+        direction LR
+        CF["Cloudflare Tunnel<br/>secure public ingress"]
+        TR["Traefik<br/>reverse proxy · TLS"]
     end
 
-    subgraph CORE["⚙️ N8N Core"]
-        N8N[N8N Main Instance]
-        NW[N8N Workers · auto-scaled]
-        NH[N8N Webhook Handler]
+    subgraph ORCH["⚙️ n8n Orchestration"]
+        direction LR
+        N8N["n8n Main<br/>orchestrator · UI"]
+        NW["n8n Workers<br/>executors · auto-scaled"]
+        NH["n8n Webhooks<br/>inbound handler"]
     end
 
-    subgraph DATA["🗄️ Data Layer"]
-        PG[(PostgreSQL)]
-        RD[(Redis Queue)]
+    subgraph DATA["🗄️ Data &amp; Storage"]
+        direction LR
+        PG[("PostgreSQL<br/>app + workflow DB")]
+        RD[("Redis<br/>queue · cache")]
+        MC["MinIO<br/>S3 media store"]
+        BR["Baserow<br/>no-code DB"]
     end
 
-    subgraph AI["🤖 AI Services"]
-        SVM[Short Video Maker]
-        AIA[AI Agents API]
-        SD[Stable Diffusion]
-        TTS[Text-to-Speech]
-        CR[Intelligent Cropper]
+    subgraph MEDIA["🎬 Media Pipeline"]
+        direction LR
+        TTS["Kokoro TTS<br/>text-to-speech"]
+        NCA["NCA Toolkit<br/>FFmpeg API · yt-dlp"]
+        CRP["Intelligent Cropper<br/>smart subject crop"]
+        SVM["Short Video Maker<br/>auto shorts"]
     end
 
-    subgraph PLAT["🧩 Platform Services"]
-        QM[Queue Metrics Monitor]
-        DS[Dynamic Scaler]
-        BK[Backup Service]
-        BR[Baserow Database]
-        MC[MinIO Object Storage]
+    subgraph GEN["🤖 AI Generation"]
+        direction LR
+        AVA["SadTalker<br/>talking-head avatar"]
+        ACE["ACE-Step<br/>music gen · GPU"]
+        AIA["AI Agents<br/>no-code agent tools"]
+    end
+
+    subgraph OPS["🧩 Ops &amp; Scaling"]
+        direction LR
+        QM["Queue Metrics<br/>queue depth"]
+        DS["Dynamic Scaler<br/>autoscale workers"]
+        BK["Backup<br/>scheduled backups"]
+        MCP["MCP Server<br/>n8n MCP tools"]
     end
 
     CF --> TR
     TR --> N8N
     TR --> NH
-    TR --> SVM
-    TR --> AIA
-    TR --> SD
-
     N8N --> PG
     N8N --> RD
+    N8N --> MC
+    N8N --> BR
     NW --> PG
     NW --> RD
     NH --> PG
-
+    N8N --> TTS
+    N8N --> NCA
+    N8N --> SVM
+    NCA --> CRP
+    N8N --> AVA
+    N8N --> ACE
+    N8N --> AIA
     QM --> RD
     DS --> RD
     DS --> NW
-
     BK --> PG
     BK --> N8N
+    MCP --> N8N
 
-    classDef ext fill:#1f6feb,stroke:#0b3d91,color:#fff,stroke-width:1px
-    classDef core fill:#ea4b71,stroke:#9e2150,color:#fff,stroke-width:1px
+    classDef edge fill:#1f6feb,stroke:#0b3d91,color:#fff,stroke-width:1px
+    classDef orch fill:#ea4b71,stroke:#9e2150,color:#fff,stroke-width:1px
     classDef data fill:#2da44e,stroke:#136229,color:#fff,stroke-width:1px
-    classDef ai fill:#8957e5,stroke:#532ba9,color:#fff,stroke-width:1px
-    classDef plat fill:#0598bc,stroke:#04566b,color:#fff,stroke-width:1px
+    classDef media fill:#0598bc,stroke:#04566b,color:#fff,stroke-width:1px
+    classDef gen fill:#8957e5,stroke:#532ba9,color:#fff,stroke-width:1px
+    classDef ops fill:#bf8700,stroke:#7d5800,color:#fff,stroke-width:1px
 
-    class CF,TR ext
-    class N8N,NW,NH core
-    class PG,RD data
-    class SVM,AIA,SD,TTS,CR ai
-    class QM,DS,BK,BR,MC plat
+    class CF,TR edge
+    class N8N,NW,NH orch
+    class PG,RD,MC,BR data
+    class TTS,NCA,CRP,SVM media
+    class AVA,ACE,AIA gen
+    class QM,DS,BK,MCP ops

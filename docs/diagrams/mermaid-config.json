@@ -2,12 +2,12 @@
   "theme": "base",
   "themeVariables": {
     "fontFamily": "Segoe UI, Helvetica, Arial, sans-serif",
-    "fontSize": "16px",
+    "fontSize": "22px",
     "lineColor": "#57606a",
     "clusterBkg": "#f6f8fa",
     "clusterBorder": "#d0d7de",
     "titleColor": "#1f2328",
     "nodeTextColor": "#ffffff"
   },
-  "flowchart": { "curve": "basis", "htmlLabels": true, "padding": 14, "nodeSpacing": 40, "rankSpacing": 60 }
+  "flowchart": { "curve": "basis", "htmlLabels": true, "padding": 18, "nodeSpacing": 55, "rankSpacing": 70, "useMaxWidth": false }
 }
