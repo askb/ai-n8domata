@@ -17,60 +17,9 @@ This platform combines N8N workflow automation with a suite of AI services, prov
 
 ### Architecture Diagram
 
-```mermaid
-graph TB
-    subgraph "External Access"
-        CF[Cloudflare Tunnel]
-        TR[Traefik Reverse Proxy]
-    end
-    
-    subgraph "N8N Core"
-        N8N[N8N Main Instance]
-        NW[N8N Workers - Auto-scaled]
-        NH[N8N Webhook Handler]
-    end
-    
-    subgraph "Data Layer"
-        PG[PostgreSQL Database]
-        RD[Redis Queue]
-    end
-    
-    subgraph "AI Services"
-        SVM[Short Video Maker]
-        AIA[AI Agents API]
-        SD[Stable Diffusion]
-        TTS[Text-to-Speech]
-        CR[Intelligent Cropper]
-    end
-    
-    subgraph "Platform Services"
-        QM[Queue Metrics Monitor]
-        DS[Dynamic Scaler]
-        BK[Backup Service]
-        BR[Baserow Database]
-        MC[MinIO Object Storage]
-    end
-    
-    CF --> TR
-    TR --> N8N
-    TR --> NH
-    TR --> SVM
-    TR --> AIA
-    TR --> SD
-    
-    N8N --> PG
-    N8N --> RD
-    NW --> PG
-    NW --> RD
-    NH --> PG
-    
-    QM --> RD
-    DS --> RD
-    DS --> NW
-    
-    BK --> PG
-    BK --> N8N
-```
+![AI-n8domata platform architecture](docs/diagrams/architecture.svg)
+
+> Rendered from [`docs/diagrams/architecture.mmd`](docs/diagrams/architecture.mmd) — regenerate with [`docs/diagrams/render.sh`](docs/diagrams/render.sh).
 
 ## ✨ Features
 
