@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: Apache-2.0
+# Override: ACE-Step music-gen service (AMD ROCm). Bring up with:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml -f docker-compose.acestep.yml up -d --build ace-step
+services:
+  ace-step:
+    build:
+      context: ./ace-step
+      dockerfile: Dockerfile
+    image: n8n-ace-step-rocm:local
+    container_name: ace-step
+    restart: unless-stopped
+    profiles: [core]
+    networks: [n8n-network]
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add: ["39", "105"]
+    security_opt: ["seccomp:unconfined"]
+    ipc: host
+    environment:
+      - HSA_OVERRIDE_GFX_VERSION=10.3.0
+      - ACE_DEVICE=0
+      - OUT_DIR=/out
+    volumes:
+      - /data/n8n/ace-step-cache:/root/.cache
+      - /data/n8n/ace-step-out:/out
+    deploy:
+      resources:
+        limits:
+          memory: 14g
+          cpus: "8.0"

@@ -43,7 +43,7 @@ repos:
         args: ['--max-line-length=100', '--extend-ignore=E203,W503']
         # Match GitHub Actions: flake8 . (all Python files)
         # Vendored upstream SadTalker file (patched copy) — not our style.
-        exclude: '^sadtalker/make_animation\.patched\.py$'
+        exclude: '^(sadtalker/make_animation\.patched\.py|ace-step/.*)$'
 
   # Docker and YAML formatting
   - repo: https://github.com/adrienverge/yamllint
