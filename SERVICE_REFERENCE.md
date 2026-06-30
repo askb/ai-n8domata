@@ -244,6 +244,15 @@ Complete reference for all services in the N8N AI Services Platform.
   PROCESSING_MODE=mediapipe
   ```
 
+### SadTalker (`sadtalker`)
+
+**Talking-head avatar animation** — drives a still portrait from an audio track to produce a lip-synced presenter clip.
+
+- **Build:** Custom Dockerfile in `./sadtalker`
+- **Profile:** `core`
+- **Features:** Audio-driven face animation for avatar/explainer videos
+- **Used by:** the Shorts/explainer pipelines that need a talking presenter
+
 ## 🎨 Advanced AI Services (Animation Profile)
 
 ### Stable Diffusion (`n8n-stable-diffusion`)
@@ -291,6 +300,15 @@ Complete reference for all services in the N8N AI Services Platform.
 - **Status:** CPU-only processing
 - **Features:** Alternative video generation approach
 
+### ACE-Step (`ace-step`)
+
+**Music & audio generation (AMD ROCm)** — generates background music / audio beds for videos.
+
+- **Build:** Custom Dockerfile in `./ace-step` (image `n8n-ace-step-rocm:local`)
+- **Bring up:** `docker compose -f docker-compose.yml -f docker-compose.gpu.yml -f docker-compose.acestep.yml up -d --build ace-step`
+- **Hardware:** AMD ROCm GPU
+- **Features:** Text/prompt-driven music generation for soundtracks
+
 ## 🛠️ Utility Services
 
 ### Backup Service (`n8n-backup`)
@@ -336,6 +354,15 @@ Complete reference for all services in the N8N AI Services Platform.
   API_KEY=your-api-key
   S3_ENDPOINT_URL=http://n8n-miniio:9000
   ```
+
+### MCP Server (`n8n-mcp-server`)
+
+**n8n Model Context Protocol server** — exposes n8n nodes/workflows as MCP tools so AI agents and assistants can discover and call them.
+
+- **Image:** `ghcr.io/czlonkowski/n8n-mcp:latest`
+- **Mode:** `MCP_MODE=stdio`
+- **Features:** Programmatic, agent-friendly access to the n8n catalog
+- **Used by:** AI agents / assistants integrating with the platform
 
 ## 📊 Service Dependencies
 

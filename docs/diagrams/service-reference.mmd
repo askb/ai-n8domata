@@ -1,50 +1,77 @@
 ---
-title: AI-n8domata — Service Topology
+title: AI-n8domata — Service Dependencies
 ---
 graph TB
-    subgraph EXT["🌐 External"]
-        CF[Cloudflare] --> TR[Traefik]
+    subgraph EDGE["🌐 Edge &amp; Ingress"]
+        direction LR
+        CF["Cloudflare Tunnel"] --> TR["Traefik"]
     end
 
-    subgraph DATA["🗄️ Core Data"]
-        PG[(PostgreSQL)]
-        RD[(Redis)]
+    subgraph CORE["⚙️ n8n Core"]
+        direction LR
+        N8N["n8n Main"]
+        NW["n8n Workers"]
+        NH["n8n Webhooks"]
     end
 
-    subgraph CORE["⚙️ N8N Core"]
-        N8N[N8N Main] --> PG
-        N8N --> RD
-        NW[N8N Workers] --> PG
-        NW --> RD
-        NH[N8N Webhooks] --> PG
+    subgraph DATA["🗄️ Data &amp; Storage"]
+        direction LR
+        PG[("PostgreSQL")]
+        RD[("Redis")]
+        MC["MinIO"]
+        BR["Baserow"]
     end
 
-    subgraph MON["📊 Monitoring"]
-        QM[Queue Metrics] --> RD
-        DS[Dynamic Scaler] --> RD
-        DS --> NW
+    subgraph MEDIA["🎬 Media &amp; AI Generation"]
+        direction LR
+        TTS["Kokoro TTS"]
+        NCA["NCA Toolkit"]
+        CRP["Intelligent Cropper"]
+        SVM["Short Video Maker"]
+        AVA["SadTalker"]
+        ACE["ACE-Step"]
+        AIA["AI Agents"]
     end
 
-    subgraph AI["🤖 AI Services"]
-        AIA[AI Agents]
-        SVM[Video Maker]
-        SD[Stable Diffusion]
+    subgraph OPS["🧩 Ops &amp; Scaling"]
+        direction LR
+        QM["Queue Metrics"]
+        DS["Dynamic Scaler"]
+        BK["Backup"]
+        MCP["MCP Server"]
     end
 
     TR --> N8N
     TR --> NH
-    TR --> AIA
-    TR --> SVM
-    TR --> SD
+    N8N --> PG
+    N8N --> RD
+    N8N --> MC
+    N8N --> BR
+    NW --> PG
+    NW --> RD
+    NH --> PG
+    N8N --> TTS
+    N8N --> NCA
+    N8N --> SVM
+    N8N --> AVA
+    N8N --> ACE
+    N8N --> AIA
+    NCA --> CRP
+    QM --> RD
+    DS --> RD
+    DS --> NW
+    BK --> PG
+    BK --> N8N
+    MCP --> N8N
 
-    classDef ext fill:#1f6feb,stroke:#0b3d91,color:#fff,stroke-width:1px
+    classDef edge fill:#1f6feb,stroke:#0b3d91,color:#fff,stroke-width:1px
     classDef core fill:#ea4b71,stroke:#9e2150,color:#fff,stroke-width:1px
     classDef data fill:#2da44e,stroke:#136229,color:#fff,stroke-width:1px
-    classDef ai fill:#8957e5,stroke:#532ba9,color:#fff,stroke-width:1px
-    classDef mon fill:#0598bc,stroke:#04566b,color:#fff,stroke-width:1px
+    classDef media fill:#0598bc,stroke:#04566b,color:#fff,stroke-width:1px
+    classDef ops fill:#bf8700,stroke:#7d5800,color:#fff,stroke-width:1px
 
-    class CF,TR ext
+    class CF,TR edge
     class N8N,NW,NH core
-    class PG,RD data
-    class AIA,SVM,SD ai
-    class QM,DS mon
+    class PG,RD,MC,BR data
+    class TTS,NCA,CRP,SVM,AVA,ACE,AIA media
+    class QM,DS,BK,MCP ops
