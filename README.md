@@ -17,9 +17,12 @@ This platform combines N8N workflow automation with a suite of AI services, prov
 
 ### Architecture Diagram
 
-![AI-n8domata platform architecture](docs/diagrams/architecture.svg)
+[![AI-n8domata platform architecture](docs/diagrams/architecture.svg)](docs/diagrams/architecture.html)
 
-> Rendered from [`docs/diagrams/architecture.mmd`](docs/diagrams/architecture.mmd) — regenerate with [`docs/diagrams/render.sh`](docs/diagrams/render.sh).
+> 🟡 **[Open the live, animated diagram →](docs/diagrams/architecture.html)** — data particles flow between services, hover any service for details, scroll to zoom and drag to pan.
+> _GitHub renders the static SVG above (it strips SVG animation inline); open `architecture.html` via GitHub Pages or download it to see the motion. The standalone [`architecture.animated.svg`](docs/diagrams/architecture.animated.svg) also animates when opened directly._
+>
+> Source: [`architecture.mmd`](docs/diagrams/architecture.mmd) — regenerate everything with [`docs/diagrams/render.sh`](docs/diagrams/render.sh).
 
 ## ✨ Features
 

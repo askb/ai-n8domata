@@ -29,5 +29,13 @@ for src in *.mmd; do
     out="${src%.mmd}.svg"
     echo "rendering ${src} -> ${out}"
     $MMDC -i "$src" -o "$out" -c mermaid-config.json -p "$PPTR" -b transparent
+    # drop Mermaid's base64 layout metadata (not needed to render; trips secret scanners)
+    sed -i 's/ data-points="[^"]*"//g' "$out"
 done
+
+# Build the animated SVG + interactive HTML from architecture.svg.
+if [ -f make_interactive.py ]; then
+    echo "building animated + interactive views"
+    python3 make_interactive.py
+fi
 echo "done."

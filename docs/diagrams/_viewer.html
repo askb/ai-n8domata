@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI-n8domata — Live Architecture</title>
+<style>
+  :root{color-scheme:light dark;}
+  body{margin:0;font:15px/1.5 "Segoe UI",Helvetica,Arial,sans-serif;background:#0d1117;color:#e6edf3;}
+  header{padding:14px 20px;border-bottom:1px solid #30363d;}
+  header h1{margin:0;font-size:18px;}
+  header p{margin:4px 0 0;color:#8b949e;font-size:13px;}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;padding:10px 20px;
+          border-bottom:1px solid #30363d;font-size:13px;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .sw{width:13px;height:13px;border-radius:3px;display:inline-block;}
+  #stage{position:relative;width:100%;height:calc(100vh - 132px);overflow:hidden;background:#fff;}
+  #stage svg{position:absolute;top:0;left:0;transform-origin:0 0;max-width:none;}
+  .hint{position:absolute;right:14px;bottom:12px;background:rgba(13,17,23,.82);
+        color:#c9d1d9;padding:6px 10px;border-radius:8px;font-size:12px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>AI-n8domata — Live Platform Architecture</h1>
+  <p>Particles show data/processing flowing between services.
+     Hover a service for details · scroll to zoom · drag to pan.</p>
+</header>
+<div class="legend">
+  <span><i class="sw" style="background:#1f6feb"></i>Edge &amp; Ingress</span>
+  <span><i class="sw" style="background:#ea4b71"></i>n8n Orchestration</span>
+  <span><i class="sw" style="background:#2da44e"></i>Data &amp; Storage</span>
+  <span><i class="sw" style="background:#0598bc"></i>Media Pipeline</span>
+  <span><i class="sw" style="background:#8957e5"></i>AI Generation</span>
+  <span><i class="sw" style="background:#bf8700"></i>Ops &amp; Scaling</span>
+</div>
+<div id="stage">__SVG__<div class="hint">scroll = zoom · drag = pan · double-click = reset</div></div>
+<script>
+(function () {
+  var stage = document.getElementById('stage');
+  var svg = stage.querySelector('svg');
+  var scale = 1, tx = 0, ty = 0, down = false, sx = 0, sy = 0;
+  function apply() {
+    svg.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+  }
+  function fit() {
+    var w = stage.clientWidth;
+    var sw = (svg.viewBox && svg.viewBox.baseVal.width) || svg.clientWidth || 1000;
+    scale = Math.min(1, (w - 40) / sw);
+    tx = (w - sw * scale) / 2;
+    ty = 20;
+    apply();
+  }
+  requestAnimationFrame(fit);
+  stage.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    var r = stage.getBoundingClientRect();
+    var mx = e.clientX - r.left, my = e.clientY - r.top;
+    var f = e.deltaY < 0 ? 1.1 : 0.9;
+    var ns = Math.min(6, Math.max(0.15, scale * f));
+    tx = mx - (mx - tx) * (ns / scale);
+    ty = my - (my - ty) * (ns / scale);
+    scale = ns;
+    apply();
+  }, { passive: false });
+  stage.addEventListener('mousedown', function (e) {
+    down = true; sx = e.clientX - tx; sy = e.clientY - ty;
+  });
+  window.addEventListener('mousemove', function (e) {
+    if (down) { tx = e.clientX - sx; ty = e.clientY - sy; apply(); }
+  });
+  window.addEventListener('mouseup', function () { down = false; });
+  stage.addEventListener('dblclick', fit);
+})();
+</script>
+</body>
+</html>
