@@ -25,6 +25,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xdg-utils \
     lsb-release \
     fonts-noto-color-emoji \
+    fonts-noto-cjk \
+    fonts-noto-core \
+    fonts-noto-extra \
     ffmpeg \
     git \
     openssh-client \

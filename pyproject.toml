@@ -3,9 +3,9 @@
 # code, not the submodules.
 [tool.black]
 line-length = 88
-force-exclude = '(^|/)services/|sadtalker/make_animation\.patched\.py'
+force-exclude = '(^|/)services/|(^|/)ace-step/|sadtalker/make_animation\.patched\.py'
 
 [tool.isort]
 profile = "black"
-skip_glob = ["services/*", "*/services/*"]
+skip_glob = ["services/*", "*/services/*", "ace-step/*"]
 extend_skip = ["sadtalker/make_animation.patched.py"]
