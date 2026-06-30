@@ -13,7 +13,9 @@ GitHub strips animation from SVGs embedded *inline* in a README, so the
 static architecture.svg is what shows there; these two files are the "live"
 view linked from the docs.
 """
+
 from __future__ import annotations
+
 import re
 import sys
 from pathlib import Path
@@ -81,8 +83,8 @@ def edge_ids(svg: str):
 def make_dots(ids):
     dots = ['<g class="flow-layer" aria-hidden="true">']
     for i, pid in enumerate(ids):
-        dur = 2.0 + (i % 5) * 0.35          # 2.0–3.4s, varied = organic
-        begin = -(i % 7) * 0.4              # stagger starts
+        dur = 2.0 + (i % 5) * 0.35  # 2.0–3.4s, varied = organic
+        begin = -(i % 7) * 0.4  # stagger starts
         dots.append(
             f'<circle class="flow-dot" r="6">'
             f'<animateMotion dur="{dur:.2f}s" begin="{begin:.2f}s" '
@@ -106,7 +108,10 @@ def add_tooltips(svg: str) -> str:
             return head
         # insert a <title> right after the opening <g ...> of the node
         return head + f"<title>{esc(d)}</title>"
-    return re.sub(r'<g class="node[^"]*" id="[^"]*flowchart-([A-Z0-9]+)-\d+"[^>]*>', repl, svg)
+
+    return re.sub(
+        r'<g class="node[^"]*" id="[^"]*flowchart-([A-Z0-9]+)-\d+"[^>]*>', repl, svg
+    )
 
 
 def build():
@@ -121,7 +126,9 @@ def build():
     svg = add_tooltips(svg)
     # ensure xlink namespace for <mpath xlink:href>
     if "xmlns:xlink" not in svg:
-        svg = svg.replace("<svg ", '<svg xmlns:xlink="http://www.w3.org/1999/xlink" ', 1)
+        svg = svg.replace(
+            "<svg ", '<svg xmlns:xlink="http://www.w3.org/1999/xlink" ', 1
+        )
     # inject <style> right after the opening <svg ...> tag
     svg = re.sub(r"(<svg\b[^>]*>)", r"\1" + STYLE, svg, count=1)
     # inject the flow dots just before </svg>
