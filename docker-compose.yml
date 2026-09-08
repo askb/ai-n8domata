@@ -541,7 +541,12 @@ services:
     deploy:
       resources:
         limits:
-          memory: 4g
+          # Kokoro sat pinned at ~90% of a 4g cap with memory.peak hitting the
+          # limit exactly, so the kernel was constantly reclaiming inside the
+          # cgroup. Synthesis stalled mid-stream (38 container restarts), which
+          # is what produced the podcast "tts retry 3/3 (TimeoutError)" runs.
+          # The host has ~38G available, so give it real headroom.
+          memory: 8g
         reservations:
           memory: 1g
     healthcheck:
