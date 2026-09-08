@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh nca-toolkit yt-dlp weekly (Mondays, early morning)
+
+[Timer]
+OnCalendar=Mon *-*-* 04:00:00
+Persistent=true
+RandomizedDelaySec=900
+
+[Install]
+WantedBy=timers.target

@@ -7,12 +7,14 @@
 # pinned-old yt-dlp shipped in the upstream image silently returns an EMPTY file
 # and the toolkit's /v1/media/download responds HTTP 500 "downloaded file is
 # empty", taking down every fresh download in the Longform2Shorts pipeline.
-# The toolkit imports yt-dlp as a Python module (routes/v1/media/download.py:
-# `import yt_dlp`), so the upgrade and retry hardening must land in the image.
+# It also surfaces as "HTTP Error 403: Forbidden" on formats that need current
+# signature/SABR handling. The toolkit imports yt-dlp as a Python module
+# (routes/v1/media/download.py: `import yt_dlp`), so the upgrade and retry
+# hardening must land in the image, and a container restart is required for a
+# new yt-dlp to be picked up by the running gunicorn workers.
 #
-# yt-dlp is intentionally installed with `--upgrade` (latest at build time)
-# rather than pinned, because it must track YouTube. Rebuild this image
-# periodically to refresh yt-dlp. See TODO-MASTER-TRACKER N18.
+# yt-dlp is intentionally kept current by bumping YTDLP_VERSION below, because
+# it must track YouTube. See refresh-ytdlp.sh and TODO-MASTER-TRACKER N18.
 #
 # The base image runs as the non-root user `appuser`. Switch to root only to
 # install into the system site-packages, then restore `appuser` for runtime so
@@ -37,9 +39,20 @@ RUN set -eux; \
     chmod 0755 /usr/local/bin/deno; \
     deno --version
 
-# yt-dlp is deliberately unpinned (must track YouTube); ignore the pin-version rule.
-# hadolint ignore=DL3013
-RUN pip install --no-cache-dir --upgrade yt-dlp
+# yt-dlp MUST be pinned to an explicit version, even though it has to track
+# YouTube. `pip install --upgrade yt-dlp` looks like it self-refreshes, but the
+# RUN layer is cached forever: the version is frozen at whatever was current the
+# first time the layer was built, and every later `docker compose build` reports
+# CACHED and changes nothing. That is how this image sat on a June yt-dlp for
+# three months while YouTube 403'd every 1080p download.
+#
+# Pinning makes the version visible in git and makes the layer cache key change
+# when it is bumped, so a rebuild genuinely refreshes. Bump via refresh-ytdlp.sh
+# (cron, weekly) or by hand:
+#   docker compose build --build-arg YTDLP_VERSION=<ver> nca-toolkit
+ARG YTDLP_VERSION=2026.8.19
+RUN pip install --no-cache-dir "yt-dlp==${YTDLP_VERSION}" && \
+    yt-dlp --version
 
 # Harden NCA's yt-dlp defaults against transient YouTube 403 fragment failures.
 COPY patch_download_retries.py /usr/local/bin/patch_download_retries.py

@@ -1,0 +1,9 @@
+[Unit]
+Description=Refresh yt-dlp in the nca-toolkit image so YouTube downloads keep working
+Documentation=https://github.com/askb/ai-n8domata/blob/master/deploy/systemd/README.md
+
+[Service]
+Type=oneshot
+# Rebuilding the image and waiting for the container to come back is slow.
+TimeoutStartSec=1800
+ExecStart=/home/abelur/scripts/refresh-ytdlp.sh
